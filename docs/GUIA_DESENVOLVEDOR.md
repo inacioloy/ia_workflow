@@ -1,8 +1,8 @@
 # Guia do Desenvolvedor — IA Workflow (`iaw`)
 
 > Guia completo para desenvolvedores do IFRN usarem o `iaw` no dia a dia.
-> Leitura recomendada antes do primeiro uso. Complementa o [README](../README.md)
-> e o [plano de implementação](PLANO.md).
+> Leitura recomendada antes do primeiro uso. Complementa o [README](../README.md),
+> os [cenários de teste](cenarios.md) e o [plano de implementação](PLANO.md).
 
 ---
 
@@ -112,6 +112,9 @@ Cria o `.iaw/` com a estrutura completa e os 3 workflows padrão.
 ---
 
 ## 3. Ciclo de vida de uma tarefa (exemplo completo)
+
+> Para o passo a passo **no projeto SUAP** (com a questão do venv), veja
+> [cenarios.md](cenarios.md).
 
 ```bash
 # 1. Inicia a partir de uma Issue do GitLab

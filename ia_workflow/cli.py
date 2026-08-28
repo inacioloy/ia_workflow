@@ -1,7 +1,7 @@
 """CLI principal do IA Workflow (iaw).
 
-Fase 1: comando ``setup`` + grupo ``config`` (configuração global) e o
-esqueleto dos comandos das fases seguintes.
+Todos os comandos possuem help text próprio (`iaw <comando> --help`) e há um
+comando de ajuda detalhada (`iaw help [comando]`).
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from rich.prompt import Confirm, Prompt
 from . import __version__
 from . import config_manager as cfg
 from . import evals
+from . import help_texts
 from . import hooks
 from . import importer
 from . import notify
@@ -45,7 +46,7 @@ console = Console()
 # --------------------------------------------------------------------------- #
 # setup / config
 # --------------------------------------------------------------------------- #
-@app.command()
+@app.command(help="Configura as credenciais globais da ferramenta (token GitLab, engine, PGD).")
 def setup() -> None:
     """Configura as credenciais globais da ferramenta (uma única vez)."""
     console.print("[bold blue]=== Configuração do IA Workflow (iaw) ===[/bold blue]\n")
@@ -87,14 +88,14 @@ def setup() -> None:
     )
 
 
-@config_app.command("set")
+@config_app.command("set", help="Define uma chave na configuração global.")
 def config_set(chave: str, valor: str) -> None:
     """Define uma chave na configuração global. Ex: iaw config set default_engine aider"""
     cfg.set(chave, valor)
     console.print(f"[green]✓[/green] {chave} = {valor}")
 
 
-@config_app.command("get")
+@config_app.command("get", help="Lê uma chave da configuração global.")
 def config_get(chave: str) -> None:
     """Lê uma chave da configuração global."""
     valor = cfg.get(chave)
@@ -107,7 +108,7 @@ def config_get(chave: str) -> None:
     console.print(f"{chave} = {valor}")
 
 
-@config_app.command("list")
+@config_app.command("list", help="Lista a configuração global (token mascarado).")
 def config_list() -> None:
     """Lista a configuração global (token mascarado)."""
     config = cfg.load_config()
@@ -117,7 +118,7 @@ def config_list() -> None:
         console.print(f"[cyan]{key}[/cyan] = {value}")
 
 
-@skill_app.command("list")
+@skill_app.command("list", help="Lista as skills instaladas em .iaw/skills/.")
 def skill_list() -> None:
     """Lista as skills instaladas em .iaw/skills/."""
     skills = skills_mod.list_skills(project.IAW_DIR)
@@ -130,7 +131,7 @@ def skill_list() -> None:
         console.print(f"[cyan]{s.name}[/cyan] — {desc}")
 
 
-@skill_app.command("add")
+@skill_app.command("add", help="Adiciona uma skill ao projeto a partir de uma fonte central.")
 def skill_add(
     name: str,
     source: str = typer.Option(None, "--source", help="Caminho ou URL Git da fonte de skills."),
@@ -145,7 +146,7 @@ def skill_add(
         raise typer.Exit(code=1) from exc
 
 
-@skill_app.command("update")
+@skill_app.command("update", help="Atualiza as skills instaladas a partir da fonte central.")
 def skill_update(
     source: str = typer.Option(None, "--source", help="Caminho ou URL Git da fonte de skills."),
 ) -> None:
@@ -161,7 +162,7 @@ def skill_update(
 # --------------------------------------------------------------------------- #
 # Comandos das fases seguintes (esqueleto)
 # --------------------------------------------------------------------------- #
-@app.command("import-legacy")
+@app.command("import-legacy", help="Importa skills/agents/hooks do legado para .iaw/ (não apaga nada).")
 def import_legacy(
     source: str = typer.Option(".", "--source", help="Diretório raiz do projeto legado."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Apenas lista o que será copiado, sem escrever."),
@@ -180,7 +181,7 @@ def import_legacy(
         )
 
 
-@app.command()
+@app.command(help="Cria/reconfigura a pasta .iaw/ no projeto atual.")
 def init() -> None:
     """Inicializa/reconfigura o diretório .iaw/ no projeto atual."""
     console.print(
@@ -205,7 +206,7 @@ def init() -> None:
     console.print("Revise os arquivos gerados e faça commit no Git.")
 
 
-@app.command("start-task")
+@app.command("start-task", help="Inicia uma tarefa a partir de uma Issue do GitLab (Task-First).")
 def start_task(
     issue_id: int,
     project_id: str = typer.Option(
@@ -258,7 +259,7 @@ def start_task(
     console.print("Revise o artefato e execute `iaw run` para acionar a IA.")
 
 
-@app.command()
+@app.command(help="Orquestra a IA pelo workflow YAML (.iaw/workflows).")
 def run(
     workflow: str = typer.Option("nova_feature", help="Workflow YAML a executar (sem extensão)."),
     detach: bool = typer.Option(False, "--detach", help="Executa em background (Fase 4)."),
@@ -291,7 +292,7 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
-@app.command("finish-task")
+@app.command("finish-task", help="Encerra a tarefa: resumo + MR + relatório PGD.")
 def finish_task(
     issue_id: int = typer.Option(None, "--issue-id", help="Id da Issue (se não puder inferir da branch)."),
     summary: str = typer.Option(None, "--summary", help="Resumo manual (pula a geração via IA)."),
@@ -318,7 +319,7 @@ def finish_task(
     console.print(f"Relatório: [cyan]{result['report']}[/cyan]")
 
 
-@app.command()
+@app.command(help="Mostra o andamento das execuções.")
 def status() -> None:
     """Mostra o andamento das execuções."""
     store = state.TaskStore()
@@ -357,7 +358,7 @@ def _print_eval_report(report: evals.EvalReport) -> None:
     )
 
 
-@app.command("eval")
+@app.command("eval", help="Roda os evals (Golden Dataset + LLM-as-a-Judge) de skills.")
 def eval_skill(
     skill: str = typer.Argument("all", help="Nome da skill (ou 'all' para todas)."),
     update_baseline: bool = typer.Option(False, "--update-baseline", help="Atualiza o baseline para o score atual."),
@@ -392,7 +393,7 @@ def eval_skill(
         raise typer.Exit(code=1)
 
 
-@app.command("install-hooks")
+@app.command("install-hooks", help="Instala o hook pre-commit que roda os evals das skills alteradas.")
 def install_hooks(
     force: bool = typer.Option(False, "--force", help="Sobrescreve o pre-commit existente."),
 ) -> None:
@@ -400,7 +401,33 @@ def install_hooks(
     console.print(hooks.install_precommit_hook(force=force))
 
 
-@app.command()
+@app.command("help")
+def help_command(
+    comando: str = typer.Argument(None, help="Comando para detalhar (ex: run, finish-task)."),
+) -> None:
+    """Mostra a ajuda detalhada de um comando (ou a lista geral)."""
+    if comando is None:
+        console.print("[bold]Comandos do iaw:[/bold]\n")
+        for name in help_texts.all_commands():
+            console.print(f"  [cyan]{name}[/cyan] — {help_texts.COMMAND_HELP[name]['resumo']}")
+        console.print("\nUse [cyan]iaw help <comando>[/cyan] para detalhes.")
+        return
+
+    info = help_texts.COMMAND_HELP.get(comando)
+    if info is None:
+        console.print(f"[red]Comando '{comando}' desconhecido.[/red]")
+        console.print("Disponíveis: " + ", ".join(help_texts.all_commands()))
+        raise typer.Exit(code=1)
+
+    console.print(f"\n[bold cyan]{comando}[/bold cyan] — {info['resumo']}\n")
+    console.print(info["detalhe"])
+    console.print("\n[bold]Exemplos:[/bold]")
+    for ex in info["exemplos"]:
+        console.print(f"  [dim]$[/dim] {ex}")
+    console.print()
+
+
+@app.command(help="Exibe a versão da ferramenta.")
 def version() -> None:
     """Exibe a versão da ferramenta."""
     console.print(f"iaw v{__version__}")
