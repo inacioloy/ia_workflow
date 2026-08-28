@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ia_workflow"
+version = "0.1.0"
+description = "CLI de orquestração Artifact-Driven para desenvolvimento assistido por IA (IFRN)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Inácio" }]
+keywords = ["ai", "cli", "orchestration", "artifact-driven", "graph-engineering", "ifrn"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+    "typer>=0.9.0",
+    "rich>=13.0.0",
+    "python-gitlab>=4.4.0",
+    "tomli>=2.0.1; python_version < '3.11'",
+    "tomli-w>=1.0.0",
+    "pyyaml>=6.0.1",
+]
+
+[project.optional-dependencies]
+# Playwright é instalado sob demanda (fase 4), para não pesar na instalação base.
+browser = ["playwright>=1.40.0"]
+notify = ["plyer>=2.1.0"]
+
+[project.scripts]
+iaw = "ia_workflow.cli:app"
+
+[tool.setuptools.packages.find]
+include = ["ia_workflow*"]
