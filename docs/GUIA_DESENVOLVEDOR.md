@@ -2,7 +2,7 @@
 
 > Guia completo para desenvolvedores do IFRN usarem o `iaw` no dia a dia.
 > Leitura recomendada antes do primeiro uso. Complementa o [README](../README.md),
-> os [cenários de teste](cenarios.md) e o [plano de implementação](PLANO.md).
+> os [exemplos de fluxos de dev](exemplos_fluxos_dev.md) e o [plano de implementação](PLANO.md).
 
 ---
 
@@ -114,7 +114,7 @@ Cria o `.iaw/` com a estrutura completa e os 3 workflows padrão.
 ## 3. Ciclo de vida de uma tarefa (exemplo completo)
 
 > Para o passo a passo **no projeto SUAP** (com a questão do venv), veja
-> [cenarios.md](cenarios.md).
+> [exemplos_fluxos_dev.md](exemplos_fluxos_dev.md).
 
 ```bash
 # 1. Inicia a partir de uma Issue do GitLab

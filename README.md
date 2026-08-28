@@ -72,7 +72,7 @@ iaw finish-task                # resumo + MR + relatório PGD
 | Documento | Conteúdo |
 |-----------|----------|
 | [Guia do Desenvolvedor](docs/GUIA_DESENVOLVEDOR.md) | ⭐ Uso completo: conceitos, config, workflows, PGD, monitoramento |
-| [Cenários de Teste](docs/cenarios.md) | Passo a passo no SUAP (bug e nova funcionalidade) + como chamar o `iaw` |
+| [Exemplos de Fluxos Dev](docs/exemplos_fluxos_dev.md) | Passo a passo no SUAP (bug e nova funcionalidade) + como chamar o `iaw` |
 | [Plano de Implementação](docs/PLANO.md) | Fases, decisões e arquitetura |
 | [Migração do SUAP](docs/MIGRACAO_SUAP.md) | Análise das pastas legadas → `.iaw/` |
 | [Evals](docs/EVALS.md) | Como testar skills/agents (Golden Dataset) |

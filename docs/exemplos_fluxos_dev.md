@@ -1,4 +1,4 @@
-# Cenários de Teste — `iaw` no SUAP
+# Exemplos de Fluxos de Dev — `iaw` no SUAP
 
 > Passo a passo prático para testar o `iaw` no projeto SUAP, cobrindo uma
 > **issue de bug** e uma **nova funcionalidade**.
