@@ -55,17 +55,40 @@ def _step_prompt(step: Step) -> str:
     """Monta a instrução do step a partir do campo `prompts`."""
     if step.prompts:
         return "\n".join(step.prompts)
-    # Fallback: um prompt genérico baseado na ação.
-    return f"Execute a etapa '{step.id}' ({step.action})."
+    fallback = {
+        "ask_clarifying_questions": (
+            "Com base nos artefatos e no contexto fornecidos, analise os requisitos "
+            "e faça até 3 perguntas para esclarecer ambiguidades da regra de negócio. "
+            "Se estiver claro, resuma o entendimento."
+        ),
+        "generate_artifact": (
+            "Com base nos artefatos e no contexto fornecidos, gere o artefato desta "
+            "etapa seguindo as diretrizes do projeto."
+        ),
+        "execute_ai_coding": (
+            "Implemente o código exatamente conforme os artefatos e especificações "
+            "fornecidos, respeitando as diretrizes do projeto (stack.md)."
+        ),
+    }
+    return fallback.get(step.action, f"Execute a etapa '{step.id}' ({step.action}).")
 
 
 def _step_context_files(step: Step, working_dir: Path) -> list[Path]:
-    """Reúne os arquivos de contexto (inputs + context) existentes no disco."""
+    """Reúne os arquivos de contexto (inputs + context + artefatos do workspace)."""
     files: list[Path] = []
     for rel in step.input_files() + step.context:
         path = working_dir / rel
-        if path.is_file():
+        if path.is_file() and path not in files:
             files.append(path)
+
+    # Auto-inclui os artefatos gerados por etapas anteriores (start-task/run),
+    # para que o motor sempre enxergue o contexto acumulado da tarefa.
+    workspace = working_dir / ".iaw_workspace"
+    if workspace.is_dir():
+        for artifact in sorted(workspace.glob("*.md")):
+            if artifact not in files:
+                files.append(artifact)
+
     return files
 
 
