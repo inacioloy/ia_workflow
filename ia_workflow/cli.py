@@ -25,6 +25,7 @@ from . import publish
 from . import runner
 from . import skills as skills_mod
 from . import state
+from . import workspace
 from .engines import available_engines
 from .gitlab_client import GitLabClient, GitLabError
 from .workflow_parser import WorkflowError, available_workflows
@@ -230,8 +231,8 @@ def start_task(
         console.print(f"[red]Erro:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    workspace = Path(".iaw_workspace")
-    workspace.mkdir(exist_ok=True)
+    task_dir = workspace.task_dir(issue_id)
+    task_dir.mkdir(parents=True, exist_ok=True)
 
     stack = ""
     stack_path = project.IAW_DIR / "stack.md"
@@ -244,14 +245,17 @@ def start_task(
         f"## Descrição\n{issue.description or '(sem descrição)'}\n\n"
         f"## Contexto do projeto (.iaw/stack.md)\n\n{stack}\n"
     )
-    artefato = workspace / "1_requisitos_validados.md"
+    artefato = task_dir / "1_requisitos_validados.md"
     artefato.write_text(conteudo, encoding="utf-8")
 
     # Salva o contexto da tarefa para o finish-task/publish.
     contexto = {"issue_id": issue_id, "title": issue.title, "project_id": pid}
-    (workspace / "contexto.json").write_text(
+    (task_dir / "contexto.json").write_text(
         json.dumps(contexto, ensure_ascii=False), encoding="utf-8"
     )
+
+    # Inicializa o progresso (state.json) para permitir `iaw run --resume`.
+    workspace.save_progress(task_dir, workflow="", issue_id=issue_id, completed_steps=[])
 
     console.print(
         f"[green]✓[/green] Artefato inicial gerado em [cyan]{artefato}[/cyan]"
@@ -262,8 +266,22 @@ def start_task(
 @app.command(help="Orquestra a IA pelo workflow YAML (.iaw/workflows).")
 def run(
     workflow: str = typer.Option("nova_feature", help="Workflow YAML a executar (sem extensão)."),
+    issue_id: int = typer.Option(
+        None,
+        "--issue-id",
+        "--task",
+        help="Id da Issue/tarefa a executar (senão infere da branch ou do workspace).",
+    ),
     detach: bool = typer.Option(False, "--detach", help="Executa em background (Fase 4)."),
     notify: bool = typer.Option(False, "--notify", help="Notifica ao terminar."),
+    resume: bool = typer.Option(False, "--resume", help="Retoma pulando etapas já concluídas (state.json)."),
+    log: bool = typer.Option(False, "--log", help="Mostra o log de execução da IA (prompt, contexto e saída)."),
+    no_publish: bool = typer.Option(
+        False,
+        "--no-publish",
+        "--local",
+        help="Não cria MR nem registra no PGD (pula a etapa de publicação).",
+    ),
 ) -> None:
     """Aciona o motor de IA para rodar o fluxo definido em .iaw/workflows."""
     if not (project.IAW_DIR / "workflows" / f"{workflow}.yaml").is_file():
@@ -273,10 +291,19 @@ def run(
             console.print(f"Disponíveis: {', '.join(disponiveis)}")
         raise typer.Exit(code=1)
 
+    resolved_issue = issue_id or publish.infer_issue_id()
     store = state.TaskStore()
-    task = store.add(workflow, issue_id=publish.infer_issue_id())
+    task = store.add(workflow, issue_id=resolved_issue)
     try:
-        exit_code = runner.run_workflow(workflow, detach=detach, notify=notify)
+        exit_code = runner.run_workflow(
+            workflow,
+            detach=detach,
+            notify=notify,
+            resume=resume,
+            issue_id=issue_id,
+            log=log,
+            no_publish=no_publish,
+        )
     except WorkflowError as exc:
         store.update(task.id, status=state.STATUS_FAILED)
         console.print(f"[red]Erro no workflow:[/red] {exc}")
@@ -312,7 +339,7 @@ def finish_task(
         console.print(f"[red]Erro:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    publish.cleanup_workspace(keep=keep_workspace)
+    publish.cleanup_workspace(keep=keep_workspace, issue_id=result["issue_id"])
     console.print(f"\n[bold green]Tarefa encerrada.[/bold green] Issue #{result['issue_id']}")
     if result["mr_url"]:
         console.print(f"MR: [cyan]{result['mr_url']}[/cyan]")

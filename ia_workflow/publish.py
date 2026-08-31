@@ -7,31 +7,24 @@ e anexa a atividade no relatório mensal.
 
 from __future__ import annotations
 
-import json
 import subprocess
-from pathlib import Path
 
 from rich.console import Console
 
 from . import config_manager as cfg
 from . import reports
+from . import workspace
 from .engines import build_engine
 from .gitlab_client import GitLabClient, GitLabError
 
 console = Console()
 
-WORKSPACE = Path(".iaw_workspace")
-
-
 def workspace_context() -> dict:
     """Lê o contexto da tarefa salvo por `iaw start-task` (se existir)."""
-    path = WORKSPACE / "contexto.json"
-    if path.is_file():
-        try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            pass
-    return {}
+    task_dir = workspace.find_task_dir()
+    if task_dir is None:
+        return {}
+    return workspace.load_context(task_dir)
 
 
 def get_current_branch() -> str:
@@ -43,15 +36,8 @@ def get_current_branch() -> str:
 
 
 def infer_issue_id() -> int | None:
-    """Tenta inferir o id da Issue a partir do nome da branch (iaw/issue-4512)."""
-    branch = get_current_branch()
-    import re
-
-    m = re.search(r"issue[-_]?(\d+)", branch, re.IGNORECASE)
-    if m:
-        return int(m.group(1))
-    ctx = workspace_context()
-    return ctx.get("issue_id")
+    """Tenta inferir o id da Issue (branch `iaw/issue-4512` ou contexto salvo)."""
+    return workspace.infer_issue_id()
 
 
 def get_git_diff(target_branch: str = "master") -> str:
@@ -156,10 +142,13 @@ def publish_task(
     return {"issue_id": issue_id, "summary": summary, "mr_url": mr_url, "report": str(report_path)}
 
 
-def cleanup_workspace(keep: bool = False) -> None:
-    """Remove a pasta transitória `.iaw_workspace/` (a menos que `keep`)."""
-    if not keep and WORKSPACE.exists():
-        import shutil
+def cleanup_workspace(keep: bool = False, issue_id: int | None = None) -> None:
+    """Remove a pasta transitória da tarefa (ou todo `.iaw_workspace/`)."""
+    if keep:
+        return
+    import shutil
 
-        shutil.rmtree(WORKSPACE)
-        console.print("[dim]Workspace transitório removido.[/dim]")
+    target = workspace.task_dir(issue_id) if issue_id is not None else workspace.WORKSPACE_ROOT
+    if target.exists():
+        shutil.rmtree(target)
+        console.print(f"[dim]Workspace transitório removido ({target}).[/dim]")

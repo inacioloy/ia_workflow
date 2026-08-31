@@ -77,7 +77,7 @@ O assistente pergunta:
 - **Token do GitLab** (Personal Access Token)
 - **URL do GitLab** (ex.: `https://gitlab.ifrn.edu.br`)
 - **Projeto padrão** (ex.: `cosinf/suap`)
-- **Motor de IA** (`pi-coding` ou `aider`)
+- **Motor de IA** (`pi-coding`, `aider` ou `antigravity`)
 - **Seu nome** (para o relatório PGD)
 - **Diretório dos relatórios PGD** (padrão: `~/.config/ia_workflow/reports`)
 
@@ -97,7 +97,9 @@ iaw config list
 ```
 
 Chaves: `gitlab_url`, `gitlab_token`, `gitlab_project`, `default_engine`,
-`dev_name`, `pgd_report_path`, `auto_write_files`, `skill_repo`.
+`default_model`, `default_agent`, `dev_name`, `pgd_report_path`,
+`auto_write_files`, `antigravity_skip_permissions`, `skill_repo`,
+`context_max_chars`, `context_max_file_chars`.
 
 ### 2.4 Preparar um projeto
 
@@ -108,6 +110,48 @@ iaw init
 
 Cria o `.iaw/` com a estrutura completa e os 3 workflows padrão.
 **Faça commit do `.iaw/`** — é a fonte da verdade do time.
+
+### 2.5 Usando o Antigravity como motor (sem API key)
+
+O Antigravity não expõe chave de API; a integração usa o **CLI oficial** (`agy`),
+já autenticado via OAuth na sua máquina. Para configurá-lo:
+
+```bash
+# 1. Garanta que o CLI está no PATH
+which agy
+
+# 2. Aponte o iaw para ele
+iaw config set default_engine antigravity
+
+# 3. (opcional) escolha o modelo/agente
+iaw config set default_model gemini-3.1-pro-high
+iaw config set default_agent ""
+
+# 4. (opcional) o motor já aprova ferramentas no modo --print; para desligar:
+iaw config set antigravity_skip_permissions false
+```
+
+O motor roda `agy --print --output-format json` no diretório do projeto e usa
+`--add-dir` para que o agente enxergue/edite os arquivos com caminhos absolutos.
+Modelos disponíveis: `agy models`.
+
+### 2.6 Janela de contexto (engine-agnóstico)
+
+Para evitar estourar a janela do modelo quando o `.iaw/` e os artefatos crescem,
+o `iaw` limita o conteúdo anexado ao prompt — **independente do motor**:
+
+```bash
+iaw config set context_max_chars 80000        # total máximo anexado
+iaw config set context_max_file_chars 20000   # máximo por arquivo
+```
+
+- Arquivos acima do limite são **truncados** (com aviso `[arquivo truncado]`).
+- Se o total estourar, os arquivos restantes são **omitidos** e listados no prompt.
+- Use `0` para desativar o limite.
+
+Além disso, quando o motor suporta (ex.: Antigravity), o `iaw` **reusa a mesma
+sessão** entre as etapas do workflow — a conversa continua, mantendo o contexto
+do diagnóstico ao passar para a etapa de código.
 
 ---
 
@@ -124,7 +168,12 @@ iaw start-task 4512
 #    .iaw_workspace/1_requisitos_validados.md
 
 # 3. Orquestra a IA pelo workflow (aprovando os gates)
-iaw run --workflow nova_feature
+#    A tarefa é inferida da branch/workspace; para indicar explicitamente:
+iaw run --workflow nova_feature --issue-id 4512
+#    Para ver o log de execução da IA (prompt, contexto e saída):
+iaw run --workflow nova_feature --issue-id 4512 --log
+#    Para rodar só as etapas locais (sem MR e sem PGD):
+iaw run --workflow nova_feature --issue-id 4512 --no-publish
 
 # 4. Encerra: resumo + MR + relatório PGD
 iaw finish-task
@@ -143,6 +192,15 @@ Aprovar esta etapa e continuar? [y/n] (y):
 ```
 
 Aprove para avançar; `n` interrompe o fluxo.
+
+Opções úteis do `iaw run`:
+
+```bash
+# --issue-id (ou --task) indica a tarefa; sem ele, infere da branch/workspace
+iaw run --workflow bug_fix --issue-id 4512 --log          # mostra o log da IA
+iaw run --workflow bug_fix --issue-id 4512 --no-publish   # pula MR + PGD (alias --local)
+iaw run --workflow bug_fix --issue-id 4512 --resume       # retoma do state.json
+```
 
 **`iaw finish-task`** gera o `git diff`, pede um resumo executivo à IA, abre o
 **Merge Request** no GitLab e registra a atividade no relatório mensal do PGD.
@@ -188,8 +246,54 @@ steps:
   - id: 3_materializacao_codigo
     depends_on: [2_planejamento_arquitetura]
     action: execute_ai_coding               # IA escreve código
+    skill: frontend-suap                    # especialista deste passo (opcional)
     require_human_approval: false           # etapa autônoma
 ```
+
+### 4.2.1 Especialista por etapa (`skill:` / `agent:`)
+
+Cada step pode apontar para uma **skill** ou um **agent** que será injetado no
+prompt como perfil de especialista:
+
+```yaml
+steps:
+  - id: 1_analisar_erro
+    action: generate_artifact
+    skill: bug-analyst            # lê .iaw/skills/bug-analyst/SKILL.md
+
+  - id: 2_corrigir_frontend
+    action: execute_ai_coding
+    skill: frontend-suap          # segue o design system do SUAP
+
+  - id: 3_corrigir_backend
+    action: execute_ai_coding
+    agent: backend-suap           # lê .iaw/agents/backend-suap.md
+```
+
+- `skill:` → `./.iaw/skills/<nome>/SKILL.md`
+- `agent:` → `./.iaw/agents/<nome>.md` (ou `./.iaw/agents/<nome>/AGENT.md`)
+
+Se a skill/agent não existir, a execução **falha na etapa** com erro claro. As
+skills são instaladas com `iaw skill add <nome> --source <path|url>` e os agents
+são importados do legado com `iaw import-legacy`.
+
+#### Etapa opcional (`allow_no_change: true`)
+
+Quando uma etapa é especializada (ex.: `skill: frontend-suap`) mas a tarefa pode
+não precisar daquele tipo de alteração, marque-a como opcional:
+
+```yaml
+- id: 2_corrigir_frontend
+  depends_on: [1_analisar_erro]
+  action: execute_ai_coding
+  skill: frontend-suap
+  allow_no_change: true   # se não houver ajuste de frontend, a IA avisa e segue
+```
+
+Com isso, o `iaw` instrui a IA a **não modificar arquivos** e responder
+`SEM_ALTERACOES_NECESSARIAS` quando a etapa não se aplicar. O orquestrador
+reconhece esse marcador, registra a etapa como concluída (“sem alterações
+ecessárias”) e continua o fluxo normalmente.
 
 ### 4.3 Ações disponíveis
 
@@ -341,7 +445,7 @@ Veja a análise completa em [MIGRACAO_SUAP.md](MIGRACAO_SUAP.md).
 | `iaw config set/get/list` | Gerencia a config global |
 | `iaw init` | Cria/reconfigura `.iaw/` no projeto |
 | `iaw start-task <id>` | Inicia tarefa a partir de Issue do GitLab |
-| `iaw run [--workflow <nome>]` | Orquestra o workflow |
+| `iaw run [--workflow <nome>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar) |
 | `iaw finish-task [--no-mr]` | Resumo + MR + relatório PGD |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/add/update` | Gerencia skills |
@@ -359,5 +463,7 @@ Veja a análise completa em [MIGRACAO_SUAP.md](MIGRACAO_SUAP.md).
 | `Token do GitLab não configurado` | Config global vazia | `iaw setup` |
 | `Workflow 'x' não encontrado` | `.iaw/workflows/x.yaml` ausente | `iaw init` ou crie o arquivo |
 | `Comando 'pi' não encontrado` | Motor de IA fora do PATH | instale o Pi ou mude `default_engine` |
+| `Comando 'agy' não encontrado` | Antigravity CLI fora do PATH | instale o Antigravity CLI ou mude `default_engine` |
 | `Playwright não está instalado` | Dependência opcional ausente | `pip install -e '.[browser]'` + `playwright install chromium` |
+| `Skill 'x' não encontrada` | Step usa `skill: x` mas a skill não existe | `iaw skill add x --source <path\|url>` ou remova o `skill:` |
 | `Skill 'x' já existe` | Duplicata em `.iaw/skills/` | use `--overwrite` |

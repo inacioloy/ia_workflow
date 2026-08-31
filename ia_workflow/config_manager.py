@@ -28,6 +28,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "gitlab_project": "",
     "skill_repo": "",
     "default_engine": "pi-coding",
+    "default_model": "",
+    "default_provider": "",
+    "default_agent": "",
+    "antigravity_skip_permissions": True,
+    # Janela de contexto (0 = sem limite). Aplicado pelo motor, independente do engine.
+    "context_max_chars": 80000,
+    "context_max_file_chars": 20000,
     "dev_name": "",
     "pgd_report_path": str(REPORTS_DIR),
     "auto_write_files": True,

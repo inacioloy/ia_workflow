@@ -1,7 +1,8 @@
 # Exemplos de Fluxos de Dev — `iaw` no SUAP
 
 > Passo a passo prático para testar o `iaw` no projeto SUAP, cobrindo uma
-> **issue de bug** e uma **nova funcionalidade**.
+> **issue de bug**, uma **nova funcionalidade** e um **bug com especialistas
+> por área** (frontend/backend).
 
 ---
 
@@ -47,7 +48,7 @@ etc.). Ative-o **antes** de rodar `iaw run`, para que a etapa de testes use o
 ```bash
 cd /home/inacio/workspace/suap
 source .venv/bin/activate        # venv do SUAP (para pytest/manage.py)
-iaw run --workflow bug_fix       # iaw chama o pytest que estiver no PATH
+iaw run --workflow bug_fix --issue-id 4512   # iaw chama o pytest que estiver no PATH
 ```
 
 > Resumindo: **`iaw` = ferramenta global** (fora do venv do SUAP). **venv do
@@ -64,8 +65,17 @@ iaw setup
 #   → token GitLab
 #   → URL: https://gitlab.ifrn.edu.br
 #   → projeto: cosinf/suap
-#   → motor: pi-coding
+#   → motor: antigravity   (ou pi-coding / aider)
 #   → seu nome (para o PGD)
+
+# Se usar Antigravity (sem API key), defina também o modelo:
+iaw config set default_engine antigravity
+iaw config set default_model gemini-3.1-pro-high
+# Veja os modelos disponíveis com: agy models
+
+# (opcional) limite da janela de contexto — evita estourar o modelo
+iaw config set context_max_chars 80000
+iaw config set context_max_file_chars 20000
 
 # 2. Preparar o SUAP
 cd /home/inacio/workspace/suap
@@ -106,7 +116,14 @@ Se a IA entendeu errado a regra de negócio, **corrija o texto** (não o código
 ### 4. Orquestra o workflow de bug
 
 ```bash
-iaw run --workflow bug_fix
+# A tarefa é inferida da branch (iaw/issue-4512); para ser explícito:
+iaw run --workflow bug_fix --issue-id 4512
+
+# Para ver o log de execução da IA (prompt, contexto e saída):
+iaw run --workflow bug_fix --issue-id 4512 --log
+
+# Para rodar só as etapas locais (diagnóstico + fix + testes), SEM MR/PGD:
+iaw run --workflow bug_fix --issue-id 4512 --no-publish
 ```
 
 | Etapa | Ação | Você precisa? |
@@ -159,7 +176,8 @@ python manage.py runserver
 ### 4. Orquestra o workflow completo
 
 ```bash
-iaw run --workflow nova_feature --notify
+iaw run --workflow nova_feature --issue-id 4540 --notify
+# adicione --log para ver o prompt/contexto/saída da IA em cada etapa
 ```
 
 | Etapa | Ação | Você precisa? |
@@ -176,6 +194,75 @@ computador **após aprovar a spec na etapa 2**.
 
 ---
 
+## Cenário 3 — Bug com **especialistas por área** (frontend/backend) 🎯
+
+> Exemplo: Issue `#4600` — erro em tela e na API; nem toda tarefa precisa das
+> duas frentes. Aqui usamos `skill:` para cada área e `allow_no_change: true`
+> para a IA pular a frente que não se aplicar.
+
+### 1. Workflow especializado (`.iaw/workflows/bug_fix_por_area.yaml`)
+
+```yaml
+name: bug_fix_por_area
+description: "Bug com diagnóstico + correção por área (frontend e backend)."
+version: "1.0"
+
+steps:
+  - id: 1_analisar_erro
+    action: generate_artifact
+    skill: bug-analyst            # .iaw/skills/bug-analyst/SKILL.md
+    context: [.iaw/stack.md]
+    outputs:
+      - file: .iaw_workspace/1_diagnostico_bug.md
+    require_human_approval: true
+
+  - id: 2_corrigir_frontend
+    depends_on: [1_analisar_erro]
+    action: execute_ai_coding
+    skill: frontend-suap          # segue o design system do SUAP
+    allow_no_change: true         # sem ajuste de frontend? a IA avisa e segue
+
+  - id: 3_corrigir_backend
+    depends_on: [2_corrigir_frontend]
+    action: execute_ai_coding
+    skill: backend-suap           # padrões Django do SUAP
+    allow_no_change: true
+
+  - id: 4_prova_testes
+    depends_on: [3_corrigir_backend]
+    action: run_terminal_command
+    command: "pytest -q {test_target}"
+
+  - id: 5_abrir_mr
+    depends_on: [4_prova_testes]
+    action: generate_summary_and_publish
+```
+
+> As skills `bug-analyst`, `frontend-suap` e `backend-suap` precisam existir em
+> `.iaw/skills/`. Se uma delas não existir, a etapa falha com erro claro —
+> instale com `iaw skill add <nome> --source <path|url>` ou use `agent:` para
+> ler de `.iaw/agents/<nome>.md`.
+
+### 2. Execução
+
+```bash
+git checkout -b iaw/issue-4600
+iaw start-task 4600
+iaw run --workflow bug_fix_por_area --issue-id 4600 --log
+```
+
+### 3. O que acontece se só o backend precisar de mudança
+
+- `2_corrigir_frontend` roda com o perfil `frontend-suap`; a IA percebe que não
+  há ajuste de frontend e responde `SEM_ALTERACOES_NECESSARIAS`.
+- O `iaw` registra:
+  ```
+  ⏭ Etapa 2_corrigir_frontend: sem alterações necessárias (a IA indicou que nada precisa ser feito).
+  ```
+- O fluxo **continua** para `3_corrigir_backend` sem abrir gate nem escrever arquivos.
+
+---
+
 ## Regras que valem para os dois cenários
 
 - A IA **nunca faz merge** — só abre o MR; o merge é revisão humana no GitLab.
@@ -188,6 +275,9 @@ computador **após aprovar a spec na etapa 2**.
 ```
 git branch → iaw start-task → REVISAR artefato → iaw run (aprovando gates)
            → MR automático → PGD registrado → code review humano no GitLab
+
+# quer enxergar o que a IA está fazendo em cada etapa?
+#   iaw run --workflow <nome> --issue-id <id> --log
 ```
 
 ---
@@ -198,5 +288,7 @@ git branch → iaw start-task → REVISAR artefato → iaw run (aprovando gates)
 |------|-------|---------|
 | `Token do GitLab não configurado` | `iaw setup` não foi feito | `iaw setup` |
 | `Comando 'pi' não encontrado` | motor fora do PATH | instale o Pi ou `iaw config set default_engine aider` |
+| `Comando 'agy' não encontrado` | Antigravity CLI fora do PATH | instale o Antigravity CLI ou `iaw config set default_engine pi-coding` |
+| `Skill 'x' não encontrada` | step usa `skill:` sem a skill em `.iaw/skills/` | `iaw skill add x --source <path\|url>` ou remova o `skill:` |
 | `Playwright não está instalado` | extra `browser` ausente | `pip install -e '.[browser]'` + `playwright install chromium` |
 | Etapa 4b falha | SUAP não está em `localhost:8000` | `python manage.py runserver` e rode de novo |

@@ -35,9 +35,32 @@ iaw setup                      # configura token GitLab, engine, nome, caminho P
 iaw init                       # cria a pasta .iaw/ no projeto atual
 
 iaw start-task 4512            # baixa a Issue do GitLab e gera o artefato
-iaw run --workflow bug_fix     # orquestra a IA pelo workflow
+iaw run --workflow bug_fix --issue-id 4512   # orquestra a IA (indicando a tarefa)
+iaw run --workflow bug_fix --issue-id 4512 --log   # idem, com log de execução da IA
+iaw run --workflow bug_fix --issue-id 4512 --no-publish   # idem, sem MR/PGD
 iaw finish-task                # resumo + MR + relatório PGD
 ```
+
+## Motores de IA suportados
+
+| Motor | Como funciona | Configurar |
+|-------|---------------|-----------|
+| **Pi Coding** | RPC/JSONL (`pi --mode rpc`) | `iaw config set default_engine pi-coding` |
+| **Aider** | subprocess (`aider --message`) | `iaw config set default_engine aider` |
+| **Antigravity** | CLI oficial `agy --print` (OAuth, **sem API key**) | `iaw config set default_engine antigravity` |
+
+Para Antigravity, escolha o modelo com `iaw config set default_model <id>`
+(ex.: `gemini-3.1-pro-high`). Veja os modelos com `agy models`.
+
+**Janela de contexto** (funciona com qualquer motor):
+
+```bash
+iaw config set context_max_chars 80000        # limite total anexado ao prompt
+iaw config set context_max_file_chars 20000   # limite por arquivo
+```
+
+Arquivos acima do limite são truncados/omitidos com aviso no prompt — evita
+estourar a janela do modelo quando o `.iaw/` e os artefatos crescem.
 
 ## Conceitos-chave
 
@@ -47,8 +70,25 @@ iaw finish-task                # resumo + MR + relatório PGD
 | **Artifact-Driven** | Artefatos validados antes do código (requisitos → spec → código) |
 | **Graph Engineering** | Workflows YAML com `depends_on` e gates de aprovação |
 | **Skills / Agents** | Pacotes reutilizáveis em `.iaw/skills/` e `.iaw/agents/` |
+| **Especialista por etapa** | Cada step do workflow pode usar `skill:`/`agent:` (ex.: frontend-suap) |
+| **Etapa opcional** | `allow_no_change: true` deixa a IA pular a etapa quando não há trabalho |
 | **Task-First** | Fluxo ancorado em Issues do GitLab |
 | **Evals / LLMOps** | Golden Dataset + LLM-as-a-Judge contra regressão |
+
+### Especialistas por etapa (`skill:` / `agent:`)
+
+```yaml
+# .iaw/workflows/bug_fix.yaml
+steps:
+  - id: 1_analisar_erro
+    action: generate_artifact
+    skill: bug-analyst            # .iaw/skills/bug-analyst/SKILL.md
+
+  - id: 2_corrigir_frontend
+    action: execute_ai_coding
+    skill: frontend-suap          # segue o design system do SUAP
+    allow_no_change: true         # pula se não houver ajuste de frontend
+```
 
 ## Comandos
 
@@ -58,7 +98,7 @@ iaw finish-task                # resumo + MR + relatório PGD
 | `iaw config set/get/list` | Gerencia a config global |
 | `iaw init` | Cria/reconfigura a pasta `.iaw/` |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
-| `iaw run [--workflow <n>]` | Orquestra o workflow YAML |
+| `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar MR/PGD) |
 | `iaw finish-task` | Abre MR e atualiza o relatório PGD |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/add/update` | Gerencia skills |
@@ -91,7 +131,7 @@ ia_workflow/                 # repositório da ferramenta
 │   ├── gitlab_client.py     # integração GitLab
 │   ├── publish.py           # finish-task (MR + PGD)
 │   ├── reports.py           # relatório mensal PGD
-│   └── engines/             # Pi Coding (RPC) e Aider (subprocess)
+│   └── engines/             # Pi Coding (RPC), Aider e Antigravity (subprocess/CLI)
 └── docs/                    # documentação
 
 <projeto>/.iaw/              # Context as Code (versionado no projeto)

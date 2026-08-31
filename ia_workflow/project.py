@@ -70,9 +70,13 @@ steps:
     require_human_approval: true
 
   # ETAPA 3: CÓDIGO
+  # Dica: use `skill:` para especializar este passo (ex.: frontend-suap, backend-suap).
+  #       `allow_no_change: true` permite à IA pular se nada precisar ser feito.
   - id: 3_materializacao_codigo
     depends_on: [2_planejamento_arquitetura]
     action: execute_ai_coding
+    # skill: frontend-suap
+    # allow_no_change: true
     inputs:
       - file: .iaw_workspace/2_especificacao_tecnica.md
     require_human_approval: false
@@ -83,7 +87,7 @@ steps:
   - id: 4a_prova_testes
     depends_on: [3_materializacao_codigo]
     action: run_terminal_command
-    command: "pytest -q"
+    command: "pytest -q {test_target}"
 
   - id: 4b_prova_visual_browser
     depends_on: [4a_prova_testes]
@@ -113,6 +117,7 @@ version: "1.0"
 steps:
   - id: 1_analisar_erro
     action: generate_artifact
+    # skill: bug-analyst
     inputs:
       - source: gitlab_api
         type: issue_description
@@ -125,6 +130,8 @@ steps:
   - id: 2_corrigir_codigo
     depends_on: [1_analisar_erro]
     action: execute_ai_coding
+    # skill: backend-suap
+    # allow_no_change: true
     require_human_approval: false
     sandbox:
       blocked_paths: [manage.py, .env]
@@ -132,7 +139,7 @@ steps:
   - id: 3_prova_testes
     depends_on: [2_corrigir_codigo]
     action: run_terminal_command
-    command: "pytest -q"
+    command: "pytest -q {test_target}"
 
   - id: 4_abrir_mr
     depends_on: [3_prova_testes]
@@ -166,7 +173,7 @@ steps:
   - id: 3_regressao
     depends_on: [2_refatorar]
     action: run_terminal_command
-    command: "pytest -q"
+    command: "pytest -q {test_target}"
 
   - id: 4_abrir_mr
     depends_on: [3_regressao]

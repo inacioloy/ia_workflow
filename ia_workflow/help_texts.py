@@ -18,11 +18,13 @@ COMMAND_HELP: dict[str, dict] = {
             "Lê e grava chaves do ~/.config/ia_workflow/config.toml. "
             "O token do GitLab é sempre mascarado na exibição.\n"
             "Chaves: gitlab_url, gitlab_token, gitlab_project, default_engine, "
-            "dev_name, pgd_report_path, auto_write_files, skill_repo."
+            "default_model, default_agent, dev_name, pgd_report_path, "
+            "auto_write_files, skill_repo, context_max_chars, "
+            "context_max_file_chars."
         ),
         "exemplos": [
-            "iaw config set default_engine aider",
-            "iaw config get gitlab_project",
+            "iaw config set default_engine antigravity",
+            "iaw config set default_model gemini-3.1-pro-high",
             "iaw config list",
         ],
     },
@@ -54,11 +56,19 @@ COMMAND_HELP: dict[str, dict] = {
             "Executa as etapas do workflow na ordem (depends_on), chamando o "
             "motor de IA, rodando comandos de terminal e parando nos gates de "
             "aprovação humana. Registra a execução em `iaw status`.\n"
-            "--notify avisa no desktop ao terminar."
+            "Use --issue-id (ou --task) para indicar a tarefa alvo; senão o id "
+            "é inferido da branch ou do workspace. --notify avisa ao terminar. "
+            "--log mostra o log de execução da IA (prompt, contexto e saída). "
+            "--no-publish (ou --local) roda sem criar MR nem registrar no PGD.\n"
+            "Cada step pode ter `skill:` ou `agent:` para usar um especialista "
+            "(.iaw/skills/<nome>/SKILL.md ou .iaw/agents/<nome>.md). "
+            "`allow_no_change: true` permite à IA pular a etapa quando nada "
+            "precisar ser feito."
         ),
         "exemplos": [
-            "iaw run --workflow bug_fix",
-            "iaw run --workflow nova_feature --notify",
+            "iaw run --workflow bug_fix --issue-id 4512",
+            "iaw run --task 4512 --workflow nova_feature --notify --log",
+            "iaw run --workflow bug_fix --issue-id 4512 --no-publish",
         ],
     },
     "finish-task": {

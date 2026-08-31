@@ -37,11 +37,16 @@ class AIEngine(ABC):
         provider: str | None = None,
         model: str | None = None,
         auto_write_files: bool = True,
+        max_context_chars: int = 0,
+        max_file_chars: int = 0,
         **_: object,
     ) -> None:
         self.provider = provider
         self.model = model
         self.auto_write_files = auto_write_files
+        # Gestão da janela de contexto (0 = sem limite). Engine-agnóstico.
+        self.max_context_chars = max_context_chars
+        self.max_file_chars = max_file_chars
 
     @abstractmethod
     def generate(
@@ -63,13 +68,39 @@ class AIEngine(ABC):
         """
 
     def build_prompt(self, prompt: str, context_files: list[str | Path] | None) -> str:
-        """Monta o prompt final anexando o conteúdo dos arquivos de contexto."""
+        """Monta o prompt final anexando o conteúdo dos arquivos de contexto.
+
+        Respeita a janela de contexto configurada: cada arquivo é limitado por
+        ``max_file_chars`` e o total anexado por ``max_context_chars`` (0 = sem
+        limite). Arquivos que não couberem são sinalizados como omitidos.
+        """
         if not context_files:
             return prompt
 
         sections = [prompt, "\n\n--- CONTEXTO (arquivos do projeto) ---"]
+        total = 0
+        omitted: list[str] = []
+
         for path in context_files:
             path = Path(path)
-            if path.is_file():
-                sections.append(f"\n### {path}\n```\n{path.read_text(encoding='utf-8')}\n```")
+            if not path.is_file():
+                continue
+
+            content = path.read_text(encoding="utf-8")
+            if self.max_file_chars and len(content) > self.max_file_chars:
+                content = content[: self.max_file_chars] + "\n…[arquivo truncado]"
+
+            block = f"\n### {path}\n```\n{content}\n```"
+            if self.max_context_chars and total + len(block) > self.max_context_chars:
+                omitted.append(str(path))
+                continue
+
+            sections.append(block)
+            total += len(block)
+
+        if omitted:
+            sections.append(
+                "\n> [janela de contexto] Arquivos omitidos por limite: "
+                + ", ".join(omitted)
+            )
         return "\n".join(sections)

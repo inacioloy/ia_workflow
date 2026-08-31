@@ -29,6 +29,9 @@ class Step:
     outputs: list[Any] = field(default_factory=list)
     prompts: list[str] = field(default_factory=list)
     command: str | None = None
+    skill: str | None = None
+    agent: str | None = None
+    allow_no_change: bool = False
     require_human_approval: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -96,6 +99,9 @@ def load_workflow(path: str | Path) -> Workflow:
                 outputs=list(raw.get("outputs") or []),
                 prompts=[str(p) for p in (raw.get("prompts") or [])],
                 command=raw.get("command"),
+                skill=str(raw["skill"]) if raw.get("skill") else None,
+                agent=str(raw["agent"]) if raw.get("agent") else None,
+                allow_no_change=bool(raw.get("allow_no_change", False)),
                 require_human_approval=bool(raw.get("require_human_approval", False)),
                 raw=raw,
             )
