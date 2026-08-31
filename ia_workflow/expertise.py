@@ -4,11 +4,35 @@ Cada step YAML pode indicar ``skill: <nome>`` (lê ``.iaw/skills/<nome>/SKILL.md
 ou ``agent: <nome>`` (lê ``.iaw/agents/<nome>.md`` — ou um diretório com
 ``AGENT.md``/``SKILL.md``). O conteúdo vira um "perfil de especialista" que é
 injetado no prompt da etapa.
+
+Se a skill/agent indicada não existir, o `iaw` **não falha**: usa a skill
+padrão (``.iaw/skills/default/SKILL.md``) ou, na ausência dela, um perfil
+genérico embutido — sempre com um aviso no prompt.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+
+
+DEFAULT_EXPERTISE_BODY = (
+    "# Perfil padrão (full-stack)\n\n"
+    "Você é um desenvolvedor sênior full-stack. Trabalhe de forma incremental, "
+    "respeite a arquitetura existente do projeto e as diretrizes de `stack.md` "
+    "e `contexto.md`. Não introduza bibliotecas/padrões externos sem aprovação. "
+    "Prefira código simples, testável e em pt-BR."
+)
+
+
+@dataclass
+class Expertise:
+    """Resultado da resolução de especialista."""
+
+    label: str
+    body: str
+    fallback: bool = False
+    requested: str = ""
 
 
 def strip_frontmatter(text: str) -> str:
@@ -44,29 +68,34 @@ def load_agent(iaw_dir: Path, name: str) -> str | None:
     return None
 
 
+def _fallback(iaw_dir: Path, requested: str) -> Expertise:
+    """Resolve a skill padrão (ou o perfil embutido) quando a indicada não existe."""
+    default = load_skill(iaw_dir, "default")
+    if default:
+        return Expertise("default", default, fallback=True, requested=requested)
+    return Expertise("default", DEFAULT_EXPERTISE_BODY, fallback=True, requested=requested)
+
+
 def resolve_expertise(
     iaw_dir: Path,
     *,
     skill: str | None = None,
     agent: str | None = None,
-) -> tuple[str | None, str | None]:
-    """Retorna ``(rótulo, instrução)`` do especialista indicado no step.
+) -> Expertise:
+    """Resolve o especialista de um step.
 
-    :raises FileNotFoundError: se a skill/agent referenciada não existir.
+    - Se ``skill``/``agent`` existir, retorna o corpo encontrado.
+    - Se não existir, cai para a skill padrão com ``fallback=True``.
+    - Se nenhum for indicado, retorna corpo vazio (sem especialista).
     """
     if skill:
         body = load_skill(iaw_dir, skill)
-        if body is None:
-            raise FileNotFoundError(
-                f"Skill '{skill}' não encontrada em .iaw/skills/{skill}/SKILL.md."
-            )
-        return skill, body
+        if body:
+            return Expertise(skill, body)
+        return _fallback(iaw_dir, skill)
     if agent:
         body = load_agent(iaw_dir, agent)
-        if body is None:
-            raise FileNotFoundError(
-                f"Agent '{agent}' não encontrado em .iaw/agents/ (procure por "
-                f"{agent}.md ou {agent}/AGENT.md)."
-            )
-        return agent, body
-    return None, None
+        if body:
+            return Expertise(agent, body)
+        return _fallback(iaw_dir, agent)
+    return Expertise("", "")

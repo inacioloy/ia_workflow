@@ -70,6 +70,7 @@ estourar a janela do modelo quando o `.iaw/` e os artefatos crescem.
 | **Artifact-Driven** | Artefatos validados antes do código (requisitos → spec → código) |
 | **Graph Engineering** | Workflows YAML com `depends_on` e gates de aprovação |
 | **Skills / Agents** | Pacotes reutilizáveis em `.iaw/skills/` e `.iaw/agents/` |
+| **Skill padrão** | `.iaw/skills/default/` é criada no `init` e usada quando uma skill não existe |
 | **Especialista por etapa** | Cada step do workflow pode usar `skill:`/`agent:` (ex.: frontend-suap) |
 | **Etapa opcional** | `allow_no_change: true` deixa a IA pular a etapa quando não há trabalho |
 | **Task-First** | Fluxo ancorado em Issues do GitLab |
@@ -96,12 +97,13 @@ steps:
 |---------|-----------|
 | `iaw setup` | Configura credenciais globais |
 | `iaw config set/get/list` | Gerencia a config global |
-| `iaw init` | Cria/reconfigura a pasta `.iaw/` |
+| `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
+| `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md (IA) |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
 | `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar MR/PGD) |
 | `iaw finish-task` | Abre MR e atualiza o relatório PGD |
 | `iaw status` | Acompanha execuções |
-| `iaw skill list/add/update` | Gerencia skills |
+| `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Centraliza skills/agents do legado em `.iaw/` |
 | `iaw eval <skill\|all>` | Evals de qualidade (Golden Dataset) |
 | `iaw install-hooks` | Hook pre-commit que bloqueia regressão |

@@ -70,12 +70,12 @@ steps:
     require_human_approval: true
 
   # ETAPA 3: CÓDIGO
-  # Dica: use `skill:` para especializar este passo (ex.: frontend-suap, backend-suap).
-  #       `allow_no_change: true` permite à IA pular se nada precisar ser feito.
+  # Troque `default` por uma skill especialista (ex.: frontend-suap, backend-suap).
+  # `allow_no_change: true` permite à IA pular se nada precisar ser feito.
   - id: 3_materializacao_codigo
     depends_on: [2_planejamento_arquitetura]
     action: execute_ai_coding
-    # skill: frontend-suap
+    skill: default
     # allow_no_change: true
     inputs:
       - file: .iaw_workspace/2_especificacao_tecnica.md
@@ -117,7 +117,7 @@ version: "1.0"
 steps:
   - id: 1_analisar_erro
     action: generate_artifact
-    # skill: bug-analyst
+    skill: default   # troque por ex.: bug-analyst
     inputs:
       - source: gitlab_api
         type: issue_description
@@ -130,7 +130,7 @@ steps:
   - id: 2_corrigir_codigo
     depends_on: [1_analisar_erro]
     action: execute_ai_coding
-    # skill: backend-suap
+    skill: default   # troque por ex.: backend-suap
     # allow_no_change: true
     require_human_approval: false
     sandbox:
@@ -224,6 +224,19 @@ TEMPLATE_FEATURE = """# Requisitos de Nova Funcionalidade
 - [ ] 
 """
 
+SKILL_DEFAULT = """---
+name: default
+description: Skill padrão usada quando nenhuma skill específica é definida.
+trigger: /default
+---
+# Skill padrão (full-stack)
+
+Você é um desenvolvedor sênior full-stack. Trabalhe de forma incremental,
+respeite a arquitetura existente e as diretrizes de `stack.md`/`contexto.md`.
+Não introduza bibliotecas/padrões externos sem aprovação. Prefira código
+simples, testável e em pt-BR.
+"""
+
 CI_EVALS_TEMPLATE = """# Exemplo de estágio de Evals de IA para o .gitlab-ci.yml do projeto.
 #
 # Copie este bloco para o seu .gitlab-ci.yml (ou use `include`) e ajuste a
@@ -274,6 +287,13 @@ def write_default_files(stack: str, testes: str) -> None:
         )
 
     (IAW_DIR / "README.md").write_text(README_CONTENT, encoding="utf-8")
+
+    # Skill padrão: sempre existe, usada como fallback quando um step aponta
+    # para uma skill/agent que ainda não foi instalada.
+    default_skill = IAW_DIR / "skills" / "default" / "SKILL.md"
+    if not default_skill.exists():
+        default_skill.parent.mkdir(parents=True, exist_ok=True)
+        default_skill.write_text(SKILL_DEFAULT, encoding="utf-8")
 
     workflows = {
         "nova_feature.yaml": WORKFLOW_NOVA_FEATURE,

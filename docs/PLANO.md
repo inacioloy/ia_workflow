@@ -29,7 +29,7 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 | 2 | Pasta de contexto | **`.iaw/`** (versionada no Git, com README auto-gerado) |
 | 3 | Config global | `~/.config/ia_workflow/config.toml` (token GitLab, engine, nome, caminho PGD) |
 | 4 | Estrutura `.iaw/` | `workflows/`, `skills/`, `templates/`, `stack.md`, `README.md`, `evals/` |
-| 5 | Comandos | `setup`, `init`, `start-task`, `run`, `finish-task`, `status`, `config set`, `skill add/update`, `eval` |
+| 5 | Comandos | `setup`, `init`, `analyze`, `start-task`, `run`, `finish-task`, `status`, `config set`, `skill add/update`, `eval` |
 | 6 | Workflows por cenário | `bug_fix`, `nova_feature`, `refatoracao` |
 | 7 | Motor agnóstico | Padrão Adapter: `PiCodingEngine`, `AiderEngine`, `AntigravityEngine` (config `default_engine`) |
 | 8 | Metodologia | 5 etapas da Attekita: Entendimento → Planejamento → Código → Prova → Consolidação |
@@ -48,6 +48,8 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 | 21 | Execução local | `iaw run --no-publish` (alias `--local`) pula a etapa de MR/PGD |
 | 22 | Janela de contexto | `context_max_chars`/`context_max_file_chars` limitam o conteúdo anexado (engine-agnóstico) |
 | 23 | Reuso de sessão | Uma instância de engine por execução; Antigravity continua a conversa (`--conversation`) entre etapas |
+| 24 | Análise de contexto | `iaw analyze` gera stack.md/contexto.md a partir do fingerprint do projeto (com fallback heurístico) |
+| 25 | Skill padrão | `.iaw/skills/default/` é criada no `init`; skill/agent ausente degrada para a padrão (não falha) |
 
 **Stack técnica**: Python ≥3.10, Typer, Rich, python-gitlab, tomli/tomli-w, PyYAML, Playwright, plyer/notify2.
 
@@ -99,6 +101,7 @@ ia_workflow/                      # repositório da ferramenta
     ├── workflow_parser.py        # Fase 3
     ├── skills.py                 # Fase 3
     ├── expertise.py              # skill/agent por etapa (Fase 3)
+    ├── analyzer.py               # iaw analyze (stack/contexto a partir do projeto)
     ├── reports.py                # Fase 4
     └── engines/
         ├── __init__.py

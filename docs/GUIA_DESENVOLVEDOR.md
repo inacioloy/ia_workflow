@@ -105,10 +105,15 @@ Chaves: `gitlab_url`, `gitlab_token`, `gitlab_project`, `default_engine`,
 
 ```bash
 cd <projeto>
-iaw init
+iaw init              # cria .iaw/ (rápido; stack/contexto ficam simples)
+iaw init --analyze    # cria .iaw/ E já preenche stack.md/contexto.md com a IA
 ```
 
-Cria o `.iaw/` com a estrutura completa e os 3 workflows padrão.
+Por padrão o `iaw init` **não** executa a análise — ele cria o `.iaw/` com a
+estrutura completa, os 3 workflows padrão e a **skill padrão**
+(`.iaw/skills/default/SKILL.md`), deixando `stack.md`/`contexto.md` em versão
+simples e avisando como preenchê-los. Para já gerar os documentos ricos na
+inicialização, use `--analyze` (ou rode `iaw analyze` depois — veja a seção 2.7).
 **Faça commit do `.iaw/`** — é a fonte da verdade do time.
 
 ### 2.5 Usando o Antigravity como motor (sem API key)
@@ -152,6 +157,34 @@ iaw config set context_max_file_chars 20000   # máximo por arquivo
 Além disso, quando o motor suporta (ex.: Antigravity), o `iaw` **reusa a mesma
 sessão** entre as etapas do workflow — a conversa continua, mantendo o contexto
 do diagnóstico ao passar para a etapa de código.
+
+### 2.7 Preencher stack.md/contexto.md a partir do projeto (`iaw analyze`)
+
+O `iaw init` gera um `stack.md` simples e um `contexto.md` vazio. Para preenchê-los
+com a análise real do repositório:
+
+```bash
+iaw analyze            # gera stack.md + contexto.md usando a IA
+iaw analyze --dry-run  # só pré-visualiza, sem gravar
+```
+
+**Como funciona o passo a passo:**
+
+1. O `iaw` monta um **fingerprint do projeto**: stack detectada (Django, Node, etc.),
+   árvore de arquivos e conteúdo dos arquivos-chave (README, `pyproject.toml`,
+   `requirements.txt`, `package.json`, `manage.py`, `settings.py`, etc.).
+2. Envia esse resumo ao motor de IA com dois pedidos:
+   - **`stack.md`** → diretrizes técnicas rígidas (stack/versões, comandos de
+     build/teste/lint, convenções e guardrails).
+   - **`contexto.md`** → domínio (objetivo, atores, subsistemas, invariantes e
+     integrações).
+3. Grava os dois arquivos em `.iaw/`.
+4. Se a IA não estiver disponível (motor fora do PATH, falha de rede), o `iaw`
+   **não deixa os arquivos vazios**: usa heurísticas com a stack detectada e
+   marca os tópicos de domínio como `(a preencher)`.
+
+Depois disso, revise os documentos (eles são a fonte da verdade da IA) e faça
+commit. Você pode rodar `iaw analyze` de novo quando o projeto evoluir.
 
 ---
 
@@ -317,10 +350,17 @@ iaw run --workflow meu_fluxo
 
 ## 5. Skills
 
-### 5.1 Listar, instalar e atualizar
+### 5.1 Criar, listar, instalar e atualizar
 
 ```bash
-iaw skill list                    # skills em .iaw/skills/
+# 1. Criar uma skill nova em branco (para escrever você mesmo)
+iaw skill create frontend-suap --description "Design system do SUAP"
+#    → gera .iaw/skills/frontend-suap/SKILL.md
+
+# 2. Listar as skills instaladas
+iaw skill list
+
+# 3. Instalar/atualizar a partir de uma fonte central
 iaw skill add <nome> --source <path|url>
 iaw skill update --source <path|url>
 ```
@@ -331,7 +371,38 @@ A fonte central pode ser configurada uma vez:
 iaw config set skill_repo https://github.com/ifrn/ia-skills.git
 ```
 
-### 5.2 Estrutura de uma skill
+**Como mapear a skill num workflow:** abra o YAML e informe o nome no step:
+
+```yaml
+- id: 2_corrigir_frontend
+  action: execute_ai_coding
+  skill: frontend-suap   # nome = pasta em .iaw/skills/
+```
+
+Se a skill não existir, o `iaw` usa a **skill padrão** (não falha).
+
+### 5.2 Skill padrão e fallback
+
+O `iaw init` cria a skill **`default`** em `.iaw/skills/default/SKILL.md`. Ela é
+o fallback para quando um step declara `skill:`/`agent:` que ainda não existe:
+
+```yaml
+- id: 2_corrigir_frontend
+  action: execute_ai_coding
+  skill: frontend-suap   # se não existir, usa a skill default (com aviso)
+```
+
+Ao executar, o prompt da etapa recebe:
+
+```
+⚠ A skill/agent 'frontend-suap' não foi encontrada; usando a skill padrão 'default'.
+```
+
+Ou seja: **a execução não falha** por skill ausente — ela degrada para a skill
+padrão. Para ter especialistas reais, instale as skills com `iaw skill add` (ou
+importe do legado com `iaw import-legacy`) e troque `default` pelo nome correto.
+
+### 5.3 Estrutura de uma skill
 
 ```yaml
 # .iaw/skills/minha_skill/SKILL.md
@@ -443,12 +514,13 @@ Veja a análise completa em [MIGRACAO_SUAP.md](MIGRACAO_SUAP.md).
 |---------|-----------|
 | `iaw setup` | Configura credenciais globais |
 | `iaw config set/get/list` | Gerencia a config global |
-| `iaw init` | Cria/reconfigura `.iaw/` no projeto |
+| `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
+| `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md |
 | `iaw start-task <id>` | Inicia tarefa a partir de Issue do GitLab |
 | `iaw run [--workflow <nome>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar) |
 | `iaw finish-task [--no-mr]` | Resumo + MR + relatório PGD |
 | `iaw status` | Acompanha execuções |
-| `iaw skill list/add/update` | Gerencia skills |
+| `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Importa legado para `.iaw/` |
 | `iaw eval <skill\|all>` | Roda evals de qualidade |
 | `iaw install-hooks [--force]` | Instala hook pre-commit de evals |

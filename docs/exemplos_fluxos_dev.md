@@ -80,7 +80,8 @@ iaw config set context_max_file_chars 20000
 # 2. Preparar o SUAP
 cd /home/inacio/workspace/suap
 source .venv/bin/activate
-iaw init                 # cria .iaw/ (stack: Python, Django, PostgreSQL; testes: pytest)
+iaw init                 # cria .iaw/ (rápido; stack/contexto ficam simples)
+iaw init --analyze       # (opcional) já preenche stack.md/contexto.md com a IA
 iaw import-legacy        # copia as 18 skills + agents + hooks (não apaga o legado)
 
 git add .iaw && git commit -m "feat: adiciona .iaw (Context as Code do iaw)"

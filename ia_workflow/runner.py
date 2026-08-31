@@ -78,13 +78,19 @@ def _step_prompt(step: Step, iaw_dir: Path) -> str:
         }
         base = fallback.get(step.action, f"Execute a etapa '{step.id}' ({step.action}).")
 
-    label, perfil = expertise.resolve_expertise(
+    exp = expertise.resolve_expertise(
         iaw_dir, skill=step.skill, agent=step.agent
     )
-    if perfil:
+    if exp.body:
+        aviso = ""
+        if exp.fallback:
+            aviso = (
+                f"⚠ A skill/agent '{exp.requested}' não foi encontrada; "
+                f"usando a skill padrão '{exp.label}'.\n\n"
+            )
         base = (
-            f"## Perfil do especialista: {label}\n\n"
-            f"{perfil}\n\n"
+            f"## Perfil do especialista: {exp.label}\n\n"
+            f"{aviso}{exp.body}\n\n"
             f"--- INSTRUÇÃO DA ETAPA ---\n\n{base}"
         )
 
@@ -155,10 +161,7 @@ def execute_step(
     if step.action in ENGINE_ACTIONS:
         engine = engine or build_engine()
         iaw_dir = working_dir / project.IAW_DIR
-        try:
-            prompt = _step_prompt(step, iaw_dir)
-        except FileNotFoundError as exc:
-            return EngineResult(success=False, error=str(exc))
+        prompt = _step_prompt(step, iaw_dir)
         context_files = _step_context_files(step, working_dir, task_dir)
 
         if log:

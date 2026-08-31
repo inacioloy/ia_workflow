@@ -33,10 +33,23 @@ COMMAND_HELP: dict[str, dict] = {
         "detalhe": (
             "Assistente que pergunta a stack e onde ficam os testes, e gera a "
             "estrutura .iaw/ (stack.md, contexto.md, README.md, workflows "
-            "nova_feature/bug_fix/refatoracao, templates e pastas vazias). "
+            "nova_feature/bug_fix/refatoracao, skill padrão, templates e pastas). "
+            "Por padrão não analisa o projeto: use `iaw init --analyze` (ou "
+            "`iaw analyze`) para preencher stack.md/contexto.md com a IA. "
             "Commita o .iaw/ para o time."
         ),
-        "exemplos": ["iaw init"],
+        "exemplos": ["iaw init", "iaw init --analyze", "iaw init && iaw analyze"],
+    },
+    "analyze": {
+        "resumo": "Analisa o projeto e preenche .iaw/stack.md e .iaw/contexto.md.",
+        "detalhe": (
+            "Coleta um fingerprint do repositório (stack detectada, árvore de "
+            "arquivos e arquivos-chave) e pede ao motor de IA que gere versões "
+            "ricas de stack.md (guardrails técnicos) e contexto.md (domínio). "
+            "Se a IA falhar, usa heurísticas simples para não deixar os arquivos "
+            "vazios. Use --dry-run para pré-visualizar."
+        ),
+        "exemplos": ["iaw analyze", "iaw analyze --dry-run"],
     },
     "start-task": {
         "resumo": "Inicia uma tarefa a partir de uma Issue do GitLab (Task-First).",
@@ -96,11 +109,14 @@ COMMAND_HELP: dict[str, dict] = {
         "resumo": "Gerencia as skills do projeto (.iaw/skills/).",
         "detalhe": (
             "list: lista as skills instaladas.\n"
+            "create: cria uma nova skill em branco para editar.\n"
             "add: instala uma skill de uma fonte central (caminho local ou URL Git).\n"
-            "update: atualiza as skills instaladas a partir da fonte."
+            "update: atualiza as skills instaladas a partir da fonte.\n"
+            "Para mapear uma skill num workflow, use `skill: <nome>` no step."
         ),
         "exemplos": [
             "iaw skill list",
+            "iaw skill create frontend-suap --description \"Design system do SUAP\"",
             "iaw skill add django-security --source https://github.com/ifrn/ia-skills.git",
             "iaw skill update",
         ],

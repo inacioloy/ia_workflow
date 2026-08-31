@@ -95,6 +95,33 @@ def _find_skill_in_source(source_dir: Path, name: str) -> Path | None:
     return None
 
 
+SKILL_TEMPLATE = """---
+name: {name}
+description: {description}
+trigger: /{name}
+---
+# Skill: {name}
+
+<!-- Escreva aqui as instruções do especialista: contexto, padrões, guardrails -->
+"""
+
+
+def create_skill(name: str, description: str = "", overwrite: bool = False) -> Path:
+    """Cria uma nova skill em branco (``.iaw/skills/<name>/SKILL.md``)."""
+    skill_dir = project.IAW_DIR / "skills" / name
+    skill_file = skill_dir / "SKILL.md"
+    if skill_file.exists() and not overwrite:
+        raise FileExistsError(f"Skill '{name}' já existe em {skill_dir}.")
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    skill_file.write_text(
+        SKILL_TEMPLATE.format(
+            name=name, description=description or f"Skill {name}."
+        ),
+        encoding="utf-8",
+    )
+    return skill_file
+
+
 def add_skill(name: str, source: str | None = None, overwrite: bool = False) -> Path:
     """Adiciona uma skill ao `.iaw/skills/` a partir da fonte central."""
     source = source or cfg.get("skill_repo", "")

@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.prompt import Confirm, Prompt
 
 from . import __version__
+from . import analyzer
 from . import config_manager as cfg
 from . import evals
 from . import help_texts
@@ -132,6 +133,22 @@ def skill_list() -> None:
         console.print(f"[cyan]{s.name}[/cyan] — {desc}")
 
 
+@skill_app.command("create", help="Cria uma nova skill em branco em .iaw/skills/<nome>/SKILL.md.")
+def skill_create(
+    name: str,
+    description: str = typer.Option("", "--description", help="Descrição curta da skill."),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Sobrescreve a skill se já existir."),
+) -> None:
+    """Cria uma nova skill local (esqueleto com frontmatter) para editar."""
+    try:
+        path = skills_mod.create_skill(name, description=description, overwrite=overwrite)
+        console.print(f"[green]✓[/green] Skill '[cyan]{name}[/cyan]' criada em {path}")
+        console.print("Edite o SKILL.md e use `skill: " + name + "` no workflow para mapeá-la.")
+    except FileExistsError as exc:
+        console.print(f"[red]Erro:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+
 @skill_app.command("add", help="Adiciona uma skill ao projeto a partir de uma fonte central.")
 def skill_add(
     name: str,
@@ -183,7 +200,13 @@ def import_legacy(
 
 
 @app.command(help="Cria/reconfigura a pasta .iaw/ no projeto atual.")
-def init() -> None:
+def init(
+    analyze: bool = typer.Option(
+        False,
+        "--analyze",
+        help="Após o init, analisa o projeto e preenche stack.md/contexto.md (IA).",
+    ),
+) -> None:
     """Inicializa/reconfigura o diretório .iaw/ no projeto atual."""
     console.print(
         "[bold blue]=== Assistente de Inicialização do IA Workflow (iaw) ===[/bold blue]\n"
@@ -204,7 +227,69 @@ def init() -> None:
         f"\n[bold green]Sucesso![/bold green] Diretório [cyan].iaw/[/cyan] criado e configurado "
         f"para {stack}."
     )
+
+    if analyze:
+        console.print(
+            "\n[bold blue]Analisando o projeto para preencher stack.md/contexto.md…[/bold blue]"
+        )
+        try:
+            docs = analyzer.analyze_project(Path.cwd(), iaw_dir=project.IAW_DIR)
+        except Exception as exc:  # motor ausente/mal configurado → mantém templates simples
+            console.print(f"[yellow]Aviso:[/yellow] análise automática falhou ({exc}).")
+            docs = {}
+
+        for name, content in docs.items():
+            path = project.IAW_DIR / name
+            if name == "contexto.md":
+                existing = path.read_text(encoding="utf-8") if path.exists() else ""
+                # Não sobrescreve um contexto já preenchido pelo usuário.
+                if existing.strip() and "a preencher" not in existing and "<!-- Descreva" not in existing:
+                    console.print(f"[dim]contexto.md já preenchido — mantido.[/dim]")
+                    continue
+            path.write_text(content, encoding="utf-8")
+            console.print(f"[green]✓[/green] {name} atualizado em [cyan]{path}[/cyan]")
+    else:
+        console.print(
+            "\n[yellow]Aviso:[/yellow] stack.md e contexto.md foram criados em versão simples. "
+            "Use [cyan]iaw init --analyze[/cyan] (ou [cyan]iaw analyze[/cyan]) para preenchê-los "
+            "a partir da análise do projeto."
+        )
+
     console.print("Revise os arquivos gerados e faça commit no Git.")
+
+
+@app.command("analyze", help="Analisa o projeto e preenche .iaw/stack.md e .iaw/contexto.md (usando a IA).")
+def analyze(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Apenas mostra o que seria gerado, sem escrever."),
+) -> None:
+    """Analisa o repositório e gera/refina stack.md e contexto.md."""
+    root = Path.cwd()
+    iaw_dir = root / project.IAW_DIR
+    console.print(f"\n[bold blue]=== Análise do projeto ({root}) ===[/bold blue]\n")
+
+    try:
+        docs = analyzer.analyze_project(root, iaw_dir=iaw_dir)
+    except Exception as exc:  # ex.: motor não configurado / binário ausente
+        console.print(f"[red]Erro ao analisar:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    for name, content in docs.items():
+        path = iaw_dir / name
+        if dry_run:
+            console.print(f"[cyan]── {name} (preview) ──[/cyan]")
+            preview = content[:2000] + ("…" if len(content) > 2000 else "")
+            console.print(preview, markup=False)
+        else:
+            path.write_text(content, encoding="utf-8")
+            console.print(f"[green]✓[/green] {name} gravado em [cyan]{path}[/cyan]")
+
+    if dry_run:
+        console.print("\n[dim](--dry-run: nada foi gravado)[/dim]")
+    else:
+        console.print(
+            "\n[bold green]Análise concluída.[/bold green] "
+            "Revise os arquivos gerados e faça commit do .iaw/."
+        )
 
 
 @app.command("start-task", help="Inicia uma tarefa a partir de uma Issue do GitLab (Task-First).")
