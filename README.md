@@ -1,6 +1,6 @@
 # ia_workflow
 
-**CLI de orquestração de IA para desenvolvimento assistido — IFRN.**
+**CLI de orquestração de IA para desenvolvimento assistido.**
 
 O `ia_workflow` (comando **`iaw`**) padroniza o uso de IA em equipe, independente
 da ferramenta de cada desenvolvedor (Pi Coding, Aider, Claude, etc.), combinando
