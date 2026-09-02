@@ -34,6 +34,10 @@ COMMAND_HELP: dict[str, dict] = {
             "Assistente que pergunta a stack e onde ficam os testes, e gera a "
             "estrutura .iaw/ (stack.md, contexto.md, README.md, workflows "
             "nova_feature/bug_fix/refatoracao, skill padrão, templates e pastas). "
+            "Se detectar o projeto SUAP, importa as skills/agentes existentes "
+            "do legado (.agents/skills, .claude/agents, .opencode/agent) e, se "
+            "faltar algum, cria os padrões (backend_tdd, sentry-fix, mr-format, "
+            "generate-test, suap-frontend, e2e-tester). "
             "Por padrão não analisa o projeto: use `iaw init --analyze` (ou "
             "`iaw analyze`) para preencher stack.md/contexto.md com a IA. "
             "Commita o .iaw/ para o time."
@@ -72,28 +76,29 @@ COMMAND_HELP: dict[str, dict] = {
             "Use --issue-id (ou --task) para indicar a tarefa alvo; senão o id "
             "é inferido da branch ou do workspace. --notify avisa ao terminar. "
             "--log mostra o log de execução da IA (prompt, contexto e saída). "
-            "--no-publish (ou --local) roda sem criar MR nem registrar no relatório.\n"
-            "Cada step pode ter `skill:` ou `agent:` para usar um especialista "
-            "(.iaw/skills/<nome>/SKILL.md ou .iaw/agents/<nome>.md). "
+            "--create-mr abre um Merge Request ao final (por padrão, não cria MR: "
+            "apenas gera o resumo e registra a atividade no relatório).\n"
+            "Cada step pode ter `skill:` (Agente Principal) ou `subagent:`/`agent:` "
+            "(Especialista isolado), além de `description:` para o monitoramento. "
             "`allow_no_change: true` permite à IA pular a etapa quando nada "
             "precisar ser feito."
         ),
         "exemplos": [
             "iaw run --workflow bug_fix --issue-id 4512",
             "iaw run --task 4512 --workflow nova_feature --notify --log",
-            "iaw run --workflow bug_fix --issue-id 4512 --no-publish",
+            "iaw run --workflow bug_fix --issue-id 4512 --create-mr",
         ],
     },
     "finish-task": {
-        "resumo": "Encerra a tarefa: resumo + MR + relatório.",
+        "resumo": "Encerra a tarefa: resumo + relatório (+ MR com --create-mr).",
         "detalhe": (
-            "Gera o git diff, pede resumo executivo à IA, abre o Merge Request "
-            "no GitLab e registra a atividade no relatório mensal. "
-            "Limpa o .iaw_workspace/ ao final."
+            "Gera o git diff, pede resumo executivo à IA e registra a atividade "
+            "no relatório mensal. Por padrão **não** abre Merge Request; use "
+            "--create-mr para abrir. Limpa o .iaw_workspace/ ao final."
         ),
         "exemplos": [
             "iaw finish-task",
-            "iaw finish-task --no-mr",
+            "iaw finish-task --create-mr",
             "iaw finish-task --summary \"Correção de N+1 nos diários\"",
         ],
     },

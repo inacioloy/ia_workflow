@@ -223,10 +223,21 @@ def init(
     testes = Prompt.ask("Onde ficam os testes automatizados?", default="pytest")
 
     project.init_project(stack, testes)
+    root = Path.cwd()
+    if project.is_suap_project(root):
+        console.print(
+            "\n[dim]Projeto SUAP detectado: importando skills/agentes existentes do legado…[/dim]"
+        )
+        importer.import_legacy(root)
+    created = project.create_suap_defaults(root)
     console.print(
         f"\n[bold green]Sucesso![/bold green] Diretório [cyan].iaw/[/cyan] criado e configurado "
         f"para {stack}."
     )
+    if created:
+        console.print("\n[bold green]Skills/agentes padrão do SUAP (fallback):[/bold green]")
+        for path in created:
+            console.print(f"  [cyan]• {path}[/cyan]")
 
     if analyze:
         console.print(
@@ -361,11 +372,11 @@ def run(
     notify: bool = typer.Option(False, "--notify", help="Notifica ao terminar."),
     resume: bool = typer.Option(False, "--resume", help="Retoma pulando etapas já concluídas (state.json)."),
     log: bool = typer.Option(False, "--log", help="Mostra o log de execução da IA (prompt, contexto e saída)."),
-    no_publish: bool = typer.Option(
+    create_mr: bool = typer.Option(
         False,
-        "--no-publish",
-        "--local",
-        help="Não cria MR nem registra no relatório (pula a etapa de publicação).",
+        "--create-mr",
+        "--create_mr",
+        help="Abre um Merge Request ao final do workflow (por padrão, não cria MR).",
     ),
 ) -> None:
     """Aciona o motor de IA para rodar o fluxo definido em .iaw/workflows."""
@@ -387,7 +398,7 @@ def run(
             resume=resume,
             issue_id=issue_id,
             log=log,
-            no_publish=no_publish,
+            create_mr=create_mr,
         )
     except WorkflowError as exc:
         store.update(task.id, status=state.STATUS_FAILED)
@@ -404,21 +415,26 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
-@app.command("finish-task", help="Encerra a tarefa: resumo + MR + relatório.")
+@app.command("finish-task", help="Encerra a tarefa: resumo + relatório (+ MR com --create-mr).")
 def finish_task(
     issue_id: int = typer.Option(None, "--issue-id", help="Id da Issue (se não puder inferir da branch)."),
     summary: str = typer.Option(None, "--summary", help="Resumo manual (pula a geração via IA)."),
     target_branch: str = typer.Option("master", "--target-branch", help="Branch de destino do MR."),
-    no_mr: bool = typer.Option(False, "--no-mr", help="Não criar MR (só atualiza o relatório)."),
+    create_mr: bool = typer.Option(
+        False,
+        "--create-mr",
+        "--create_mr",
+        help="Abre o Merge Request (por padrão, só atualiza o relatório).",
+    ),
     keep_workspace: bool = typer.Option(False, "--keep-workspace", help="Mantém .iaw_workspace/ após concluir."),
 ) -> None:
-    """Encerra a tarefa: gera resumo, abre MR e atualiza o relatório."""
+    """Encerra a tarefa: gera resumo, atualiza o relatório e (opcionalmente) abre o MR."""
     try:
         result = publish.publish_task(
             issue_id=issue_id,
             summary=summary,
             target_branch=target_branch,
-            create_mr=not no_mr,
+            create_mr=create_mr,
         )
     except (ValueError, GitLabError) as exc:
         console.print(f"[red]Erro:[/red] {exc}")

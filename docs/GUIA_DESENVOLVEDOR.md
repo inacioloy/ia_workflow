@@ -205,10 +205,10 @@ iaw start-task 4512
 iaw run --workflow nova_feature --issue-id 4512
 #    Para ver o log de execução da IA (prompt, contexto e saída):
 iaw run --workflow nova_feature --issue-id 4512 --log
-#    Para rodar só as etapas locais (sem MR e sem relatório):
-iaw run --workflow nova_feature --issue-id 4512 --no-publish
+#    Para abrir o MR ao final (por padrão, não cria MR):
+iaw run --workflow nova_feature --issue-id 4512 --create-mr
 
-# 4. Encerra: resumo + MR + relatório
+# 4. Encerra: resumo + relatório (+ MR com --create-mr)
 iaw finish-task
 ```
 
@@ -231,17 +231,17 @@ Opções úteis do `iaw run`:
 ```bash
 # --issue-id (ou --task) indica a tarefa; sem ele, infere da branch/workspace
 iaw run --workflow bug_fix --issue-id 4512 --log          # mostra o log da IA
-iaw run --workflow bug_fix --issue-id 4512 --no-publish   # pula MR + relatório (alias --local)
+iaw run --workflow bug_fix --issue-id 4512 --create-mr    # abre MR ao final
 iaw run --workflow bug_fix --issue-id 4512 --resume       # retoma do state.json
 ```
 
-**`iaw finish-task`** gera o `git diff`, pede um resumo executivo à IA, abre o
-**Merge Request** no GitLab e registra a atividade no relatório mensal.
+**`iaw finish-task`** gera o `git diff`, pede um resumo executivo à IA e registra
+a atividade no relatório mensal. Por padrão **não** abre MR; use `--create-mr`.
 
 Opções úteis do `finish-task`:
 
 ```bash
-iaw finish-task --no-mr              # só atualiza o relatório (sem abrir MR)
+iaw finish-task --create-mr          # abre o MR (por padrão, só atualiza o relatório)
 iaw finish-task --summary "texto"    # pula a geração do resumo via IA
 iaw finish-task --target-branch main # branch de destino do MR
 iaw finish-task --keep-workspace     # mantém .iaw_workspace/ após concluir
@@ -255,9 +255,9 @@ iaw finish-task --keep-workspace     # mantém .iaw_workspace/ após concluir
 
 | Workflow | Quando usar | Etapas |
 |----------|-------------|--------|
-| `nova_feature` | Nova funcionalidade | Entendimento → Spec → Código → Testes → Prova visual → Consolidação |
-| `bug_fix` | Correção de bug | Diagnóstico → Fix → Testes → MR |
-| `refatoracao` | Refatoração segura | Mapear → Refatorar → Regressão → MR |
+| `nova_feature` | Nova funcionalidade | Entendimento → Spec → Backend (TDD) → Frontend (Design System) → Testes/E2E/Visual → Consolidação |
+| `bug_fix` | Correção de bug | Sentry → Diagnóstico → Teste Red → Fix → Testes → Consolidação |
+| `refatoracao` | Refatoração segura | Rede de segurança → Refatorar → Regressão → Adaptar frontend → Consolidação |
 
 ### 4.2 Anatomia de um workflow YAML
 
@@ -276,17 +276,23 @@ steps:
     action: generate_artifact
     require_human_approval: true
 
-  - id: 3_materializacao_codigo
+  - id: 3a_materializacao_backend
     depends_on: [2_planejamento_arquitetura]
     action: execute_ai_coding               # IA escreve código
-    skill: frontend-suap                    # especialista deste passo (opcional)
+    description: "Implementa o backend em ciclos TDD."   # monitoramento
+    skill: backend_tdd                        # Agente Principal (skill)
+
+  - id: 3b_materializacao_frontend
+    depends_on: [3a_materializacao_backend]
+    action: execute_ai_coding
+    subagent: suap-frontend                 # Especialista isolado
     require_human_approval: false           # etapa autônoma
 ```
 
-### 4.2.1 Especialista por etapa (`skill:` / `agent:`)
+### 4.2.1 Especialista por etapa (`skill:` / `subagent:`)
 
-Cada step pode apontar para uma **skill** ou um **agent** que será injetado no
-prompt como perfil de especialista:
+Cada step pode apontar para uma **skill** (Agente Principal) ou um **subagente**
+(`subagent:`/`agent:`) que será injetado no prompt como perfil de especialista:
 
 ```yaml
 steps:
@@ -298,17 +304,17 @@ steps:
     action: execute_ai_coding
     skill: frontend-suap          # segue o design system do SUAP
 
-  - id: 3_corrigir_backend
+  - id: 3_validar_fluxo
     action: execute_ai_coding
-    agent: backend-suap           # lê .iaw/agents/backend-suap.md
+    subagent: e2e-tester          # lê .iaw/agents/e2e-tester/
 ```
 
-- `skill:` → `./.iaw/skills/<nome>/SKILL.md`
-- `agent:` → `./.iaw/agents/<nome>.md` (ou `./.iaw/agents/<nome>/AGENT.md`)
+- `skill:` → `./.iaw/skills/<nome>/SKILL.md` (Agente Principal)
+- `subagent:` (ou `agent:`) → `./.iaw/agents/<nome>.md` (ou `./.iaw/agents/<nome>/AGENT.md`) — Especialista isolado
 
-Se a skill/agent não existir, a execução **falha na etapa** com erro claro. As
-skills são instaladas com `iaw skill add <nome> --source <path|url>` e os agents
-são importados do legado com `iaw import-legacy`.
+Se a skill/subagente não existir, o `iaw` **degrada** para a skill padrão
+(`default`) com aviso. As skills são instaladas com `iaw skill add <nome>
+--source <path|url>` e os agents são importados do legado com `iaw import-legacy`.
 
 #### Etapa opcional (`allow_no_change: true`)
 
@@ -337,7 +343,7 @@ ecessárias”) e continua o fluxo normalmente.
 | `execute_ai_coding` | IA escreve código (autônoma ou com gate) |
 | `run_terminal_command` | Executa comando shell (ex.: `pytest`) |
 | `run_browser_harness` | Abre o navegador e tira screenshot (prova visual) |
-| `generate_summary_and_publish` | Resumo + MR + relatório |
+| `generate_summary_and_publish` | Resumo + relatório (+ MR com `--create-mr`) |
 
 ### 4.4 Criando um workflow próprio
 
@@ -517,8 +523,8 @@ Veja a análise completa em [MIGRACAO_SUAP.md](MIGRACAO_SUAP.md).
 | `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md |
 | `iaw start-task <id>` | Inicia tarefa a partir de Issue do GitLab |
-| `iaw run [--workflow <nome>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar) |
-| `iaw finish-task [--no-mr]` | Resumo + MR + relatório |
+| `iaw run [--workflow <nome>] [--issue-id <id>] [--log] [--create-mr]` | Orquestra o workflow (tarefa, log e/ou abrindo MR) |
+| `iaw finish-task [--create-mr]` | Resumo + relatório (+ MR) |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Importa legado para `.iaw/` |

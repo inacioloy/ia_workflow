@@ -1,8 +1,9 @@
-"""Publicação da tarefa (resumo + MR + relatório).
+"""Publicação da tarefa (resumo + relatório; MR opcional).
 
 Fluxo usado pelo `iaw finish-task` e pelo step `generate_summary_and_publish`
-dos workflows: gera o diff, pede o resumo executivo à IA, abre o MR no GitLab
-e anexa a atividade no relatório mensal.
+dos workflows: gera o diff, pede o resumo executivo à IA e anexa a atividade
+no relatório mensal. O Merge Request só é aberto com ``create_mr=True``
+(flag ``--create-mr`` na CLI).
 """
 
 from __future__ import annotations
@@ -68,14 +69,22 @@ def infer_module(diff: str) -> str:
     return counts.most_common(1)[0][0] if counts else paths[0]
 
 
-def generate_summary(diff: str) -> str:
+def generate_summary(diff: str, instructions: str = "") -> str:
     """Pede à IA um resumo executivo do diff."""
     if not diff.strip():
         return "(sem alterações de código detectadas)"
 
     engine = build_engine()
+    header = ""
+    if instructions.strip():
+        header = (
+            "# Perfil do especialista (formatação do resumo/MR)\n\n"
+            f"{instructions.strip()}\n\n"
+            "--- INSTRUÇÃO ---\n\n"
+        )
     prompt = (
-        "Gere um resumo executivo em pt-BR das alterações abaixo, explicando "
+        header
+        + "Gere um resumo executivo em pt-BR das alterações abaixo, explicando "
         "a causa raiz resolvida, os arquivos modificados e o impacto no negócio. "
         "Seja objetivo (2 a 4 frases).\n\n"
         f"```diff\n{diff[:20000]}\n```"
@@ -119,9 +128,14 @@ def publish_task(
     issue_id: int | None = None,
     summary: str | None = None,
     target_branch: str = "master",
-    create_mr: bool = True,
+    create_mr: bool = False,
+    summary_instructions: str = "",
 ) -> dict:
-    """Executa o fluxo de encerramento e retorna um resumo do que foi feito."""
+    """Executa o fluxo de encerramento e retorna um resumo do que foi feito.
+
+    Por padrão **não** cria Merge Request: apenas gera o resumo e registra a
+    atividade no relatório mensal. Passe ``create_mr=True`` para abrir o MR.
+    """
     issue_id = issue_id or infer_issue_id()
     if issue_id is None:
         raise ValueError(
@@ -129,12 +143,14 @@ def publish_task(
         )
 
     diff = get_git_diff(target_branch)
-    summary = summary or generate_summary(diff)
+    summary = summary or generate_summary(diff, summary_instructions)
 
     mr_url = ""
     if create_mr:
         mr_url = create_merge_request(issue_id, summary, target_branch)
         console.print(f"[green]✓[/green] Merge Request criado: [cyan]{mr_url}[/cyan]")
+    else:
+        console.print("[dim]Merge Request não criado (use --create-mr para abrir).[/dim]")
 
     report_path = reports.append_activity(issue_id=issue_id, summary=summary, mr_url=mr_url)
     console.print(f"[green]✓[/green] Atividade registrada em [cyan]{report_path}[/cyan]")

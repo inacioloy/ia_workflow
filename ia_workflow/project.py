@@ -6,6 +6,7 @@ regras, workflows, skills, agents, templates, hooks e evals do projeto.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 IAW_DIR = Path(".iaw")
@@ -33,20 +34,21 @@ Este diretório contém as regras de negócio, arquitetura e fluxos de trabalho
 1. `iaw init` — reconfigura o contexto deste projeto.
 2. `iaw start-task <id_gitlab>` — inicia uma tarefa a partir de uma Issue do GitLab.
 3. `iaw run` — orquestra a IA pelo workflow configurado.
-4. `iaw finish-task` — audita o código, abre o MR e atualiza o relatório.
+4. `iaw finish-task` — audita o código, atualiza o relatório e (com --create-mr) abre o MR.
 
 *Importante: nunca versione credenciais/tokens aqui. Use `iaw config set` para a sua máquina.*
 """
 
 WORKFLOW_NOVA_FEATURE = """# Workflow: nova funcionalidade (Spec-Driven, 5 etapas da Attekita)
 name: nova_feature
-description: "Fluxo completo para novas features: Entendimento → Planejamento → Código → Prova → Consolidação."
+description: "Fluxo completo para novas features: Entendimento → Planejamento → Backend (TDD) → Frontend (Design System) → Prova → Consolidação."
 version: "1.0"
 
 steps:
-  # ETAPA 1: ENTENDIMENTO
+  # ETAPA 1: ENTENDIMENTO (Agente Principal)
   - id: 1_entendimento_problema
     action: ask_clarifying_questions
+    description: "Lê a Issue e o contexto do projeto e faz perguntas para fechar a regra de negócio."
     inputs:
       - source: gitlab_api
         type: issue_description
@@ -57,10 +59,11 @@ steps:
       - file: .iaw_workspace/1_requisitos_validados.md
     require_human_approval: true
 
-  # ETAPA 2: PLANEJAMENTO (Spec)
+  # ETAPA 2: PLANEJAMENTO (Spec — Agente Principal)
   - id: 2_planejamento_arquitetura
     depends_on: [1_entendimento_problema]
     action: generate_artifact
+    description: "Gera a especificação técnica (Models, Views, endpoints) a partir dos requisitos validados."
     inputs:
       - file: .iaw_workspace/1_requisitos_validados.md
     context:
@@ -69,38 +72,59 @@ steps:
       - file: .iaw_workspace/2_especificacao_tecnica.md
     require_human_approval: true
 
-  # ETAPA 3: CÓDIGO
-  # Troque `default` por uma skill especialista (ex.: frontend-suap, backend-suap).
-  # `allow_no_change: true` permite à IA pular se nada precisar ser feito.
-  - id: 3_materializacao_codigo
+  # ETAPA 3A: BACKEND (Agente Principal + skill: backend_tdd)
+  - id: 3a_materializacao_backend
     depends_on: [2_planejamento_arquitetura]
     action: execute_ai_coding
-    skill: default
-    # allow_no_change: true
+    description: "Implementa o backend (Models, Views, Forms) em ciclos TDD com pytest."
+    skill: backend_tdd
     inputs:
       - file: .iaw_workspace/2_especificacao_tecnica.md
     require_human_approval: false
     sandbox:
       blocked_paths: [manage.py, .env]
 
-  # ETAPA 4: PROVA (testes + validação visual)
+  # ETAPA 3B: FRONTEND (Subagente suap-frontend)
+  - id: 3b_materializacao_frontend
+    depends_on: [3a_materializacao_backend]
+    action: execute_ai_coding
+    description: "Desenha os templates usando estritamente o Design System do SUAP (sem CSS customizado), a partir das Views criadas."
+    subagent: suap-frontend
+    inputs:
+      - file: .iaw_workspace/2_especificacao_tecnica.md
+    require_human_approval: false
+    sandbox:
+      blocked_paths: [manage.py, .env]
+
+  # ETAPA 4: PROVA (testes + validação E2E + visual)
   - id: 4a_prova_testes
-    depends_on: [3_materializacao_codigo]
+    depends_on: [3b_materializacao_frontend]
     action: run_terminal_command
+    description: "Roda a suíte de testes do backend (pytest)."
     command: "pytest -q {test_target}"
 
-  - id: 4b_prova_visual_browser
+  - id: 4b_prova_e2e
     depends_on: [4a_prova_testes]
+    action: execute_ai_coding
+    description: "Escreve/executa os testes E2E de interface (Playwright/Behave) com o subagente e2e-tester."
+    subagent: e2e-tester
+    allow_no_change: true
+
+  - id: 4c_prova_visual_browser
+    depends_on: [4b_prova_e2e]
     action: run_browser_harness
+    description: "Abre a aplicação no navegador e captura screenshot como prova visual."
     config:
       start_url: "http://localhost:8000/"
     outputs:
       - file: .iaw_workspace/screenshot_prova.png
 
-  # ETAPA 5: CONSOLIDAÇÃO + RELATÓRIO
+  # ETAPA 5: CONSOLIDAÇÃO + MR (Agente Principal + skill: mr-format)
   - id: 5_consolidacao_relatorio
-    depends_on: [4b_prova_visual_browser]
+    depends_on: [4c_prova_visual_browser]
     action: generate_summary_and_publish
+    description: "Gera o resumo, registra a atividade no relatório e abre o MR (somente com --create-mr)."
+    skill: mr-format
     integrations:
       - gitlab:
           action: create_merge_request
@@ -109,15 +133,17 @@ steps:
           target: "{{relatorio_path}}/{{mes_ano}}.md"
 """
 
-WORKFLOW_BUG_FIX = """# Workflow: correção de bug (direto, focado no traceback)
+WORKFLOW_BUG_FIX = """# Workflow: correção de bug (cirúrgico, concentrado no Agente Principal)
 name: bug_fix
-description: "Correção de bug enxuta: analisar erro → fix → testes → MR. Pula a etapa de arquitetura."
+description: "Correção de bug enxuta: Sentry → diagnóstico → teste Red → fix → testes → MR. Alta concentração de skills."
 version: "1.0"
 
 steps:
+  # 1. ANÁLISE DO ERRO (Agente Principal + skill: sentry-fix)
   - id: 1_analisar_erro
     action: generate_artifact
-    skill: default   # troque por ex.: bug-analyst
+    description: "Analisa o evento/traceback (Sentry) e localiza a causa raiz no código."
+    skill: sentry-fix
     inputs:
       - source: gitlab_api
         type: issue_description
@@ -127,57 +153,103 @@ steps:
       - file: .iaw_workspace/1_diagnostico_bug.md
     require_human_approval: true
 
-  - id: 2_corrigir_codigo
+  # 2. TESTE QUE FALHA (Red) — obrigatório antes da correção
+  - id: 2_teste_red
     depends_on: [1_analisar_erro]
     action: execute_ai_coding
-    skill: default   # troque por ex.: backend-suap
-    # allow_no_change: true
+    description: "Escreve um teste que reproduz o bug e DEVE falhar (Red) antes da correção."
+    skill: backend_tdd
+    inputs:
+      - file: .iaw_workspace/1_diagnostico_bug.md
+    require_human_approval: false
+
+  # 3. CORREÇÃO (Agente Principal + skill: sentry-fix)
+  - id: 3_corrigir_codigo
+    depends_on: [2_teste_red]
+    action: execute_ai_coding
+    description: "Corrige o código (Green) para o teste passar, de forma cirúrgica."
+    skill: sentry-fix
     require_human_approval: false
     sandbox:
       blocked_paths: [manage.py, .env]
 
-  - id: 3_prova_testes
-    depends_on: [2_corrigir_codigo]
+  # 4. PROVA
+  - id: 4_prova_testes
+    depends_on: [3_corrigir_codigo]
     action: run_terminal_command
+    description: "Roda os testes para confirmar a correção e ausência de regressão."
     command: "pytest -q {test_target}"
 
-  - id: 4_abrir_mr
-    depends_on: [3_prova_testes]
+  # 5. CONSOLIDAÇÃO + MR (Agente Principal + skill: mr-format)
+  - id: 5_abrir_mr
+    depends_on: [4_prova_testes]
     action: generate_summary_and_publish
+    description: "Gera o resumo, registra a atividade no relatório e abre o MR (somente com --create-mr)."
+    skill: mr-format
     integrations:
       - gitlab:
           action: create_merge_request
 """
 
-WORKFLOW_REFATORACAO = """# Workflow: refatoração (clean code + testes de regressão)
+WORKFLOW_REFATORACAO = """# Workflow: refatoração segura (rede de segurança + regressão)
 name: refatoracao
-description: "Refatoração segura: reduzir complexidade sem alterar comportamento, com regressão forte."
+description: "Refatoração segura: rede de segurança → refatorar → regressão → adaptar frontend → MR."
 version: "1.0"
 
 steps:
-  - id: 1_mapear_alvo
+  # 1A. REDE DE SEGURANÇA — BACKEND (Agente Principal + skill: generate-test)
+  - id: 1a_rede_seguranca_backend
     action: generate_artifact
+    description: "Gera a rede de segurança do backend (testes de regressão) com a skill generate-test."
+    skill: generate-test
     context:
       - .iaw/stack.md
     outputs:
-      - file: .iaw_workspace/1_plano_refatoracao.md
+      - file: .iaw_workspace/1a_rede_seguranca_backend.md
+    allow_no_change: true
     require_human_approval: true
 
+  # 1B. REDE DE SEGURANÇA — FRONTEND (Subagente e2e-tester)
+  - id: 1b_rede_seguranca_frontend
+    depends_on: [1a_rede_seguranca_backend]
+    action: generate_artifact
+    description: "Mapeia a tela atual (comportamento visual) antes de refatorar, com o subagente e2e-tester."
+    subagent: e2e-tester
+    outputs:
+      - file: .iaw_workspace/1b_rede_seguranca_frontend.md
+    allow_no_change: true
+    require_human_approval: true
+
+  # 2. REFATORAR (Agente Principal + hooks de complexidade)
   - id: 2_refatorar
-    depends_on: [1_mapear_alvo]
+    depends_on: [1b_rede_seguranca_frontend]
     action: execute_ai_coding
+    description: "Refatora o código mantendo o comportamento, rodando os hooks de complexidade (check_complexity.py, complexidade <= 10)."
     context:
       - .iaw/hooks/check_complexity.py
     require_human_approval: false
 
+  # 3. REGRESSÃO
   - id: 3_regressao
     depends_on: [2_refatorar]
     action: run_terminal_command
+    description: "Roda a suíte de testes para garantir que nenhum comportamento mudou (regressão)."
     command: "pytest -q {test_target}"
 
-  - id: 4_abrir_mr
+  # 4. ADAPTAR FRONTEND (Subagente suap-frontend)
+  - id: 4_adaptar_frontend
     depends_on: [3_regressao]
+    action: execute_ai_coding
+    description: "Adapta o frontend se as variáveis de contexto das Views refatoradas mudaram."
+    subagent: suap-frontend
+    allow_no_change: true
+
+  # 5. CONSOLIDAÇÃO + MR (Agente Principal + skill: mr-format)
+  - id: 5_abrir_mr
+    depends_on: [4_adaptar_frontend]
     action: generate_summary_and_publish
+    description: "Gera o resumo, registra a atividade no relatório e abre o MR (somente com --create-mr)."
+    skill: mr-format
     integrations:
       - gitlab:
           action: create_merge_request
@@ -257,6 +329,176 @@ ai-evals:
 """
 
 
+SUAP_SKILLS: dict[str, str] = {
+    "backend_tdd": """---
+name: backend_tdd
+description: Desenvolvimento backend orientado a testes (TDD) com pytest, para o SUAP.
+trigger: /backend_tdd
+---
+# Skill: Backend TDD (Django + pytest)
+
+Você é um especialista em desenvolvimento backend no SUAP (Django + PostgreSQL),
+seguindo estritamente os padrões do sistema definidos em `stack.md` e `contexto.md`.
+Trabalhe em ciclos TDD:
+
+1. **Red** — escreva um teste que falha (pytest) para o comportamento desejado.
+2. **Green** — implemente a menor quantidade de código para o teste passar.
+3. **Refactor** — limpe o código mantendo os testes verdes.
+
+- Foco: Models, Views, Forms, Serializers e regras de negócio.
+- Sempre rode `pytest -q {test_target}` após cada ciclo.
+- Respeite a arquitetura e os padrões existentes do SUAP.
+- Não introduza bibliotecas externas sem aprovação.
+""",
+    "sentry-fix": """---
+name: sentry-fix
+description: Correção de bugs a partir de eventos do Sentry (análise de causa raiz).
+trigger: /sentry-fix
+---
+# Skill: Sentry Fix
+
+Você é um especialista em triagem e correção de bugs via Sentry.
+
+1. Analise o traceback/evento do Sentry para identificar a causa raiz.
+2. Reproduza o cenário em um teste que falha (Red).
+3. Corrija o código (Green) e garanta que o teste passa.
+4. Valide o impacto no código relacionado (regressão).
+
+- Use busca semântica para localizar o código relevante.
+- Foco em correções cirúrgicas, sem refatorações desnecessárias.
+""",
+    "mr-format": """---
+name: mr-format
+description: Formatação do Merge Request (título, descrição e changelog).
+trigger: /mr-format
+---
+# Skill: MR Format
+
+Você formata a abertura do Merge Request no GitLab.
+
+- Título: `[módulo] Issue #id: resumo curto`.
+- Descrição: sumário, causa raiz, arquivos modificados, impacto e changelog.
+- Sempre inclua `Closes #id`.
+- Linguagem: pt-BR, objetivo e claro.
+""",
+    "generate-test": """---
+name: generate-test
+description: Geração de rede de segurança (testes de regressão) para código existente.
+trigger: /generate-test
+---
+# Skill: Generate Test
+
+Você gera a "rede de segurança" antes de qualquer refatoração ou correção.
+
+- Mapeie o comportamento atual e escreva testes de regressão (pytest).
+- Cubra os fluxos críticos e casos de borda.
+- Garanta que os testes passem ANTES de alterar o código de produção.
+- Foco: backend Django (Models, Views, Forms, regras de negócio).
+""",
+}
+
+SUAP_AGENTS: dict[str, str] = {
+    "suap-frontend": """---
+name: suap-frontend
+description: Especialista em frontend do SUAP (Design System, templates Django).
+---
+# Agente: SUAP Frontend
+
+Você é um especialista em frontend do SUAP, restrito ao Design System oficial.
+
+- Trabalhe APENAS com templates Django e o Design System do SUAP.
+- Proibido CSS customizado ou frameworks externos.
+- Reaproveite componentes existentes; respeite classes, variáveis e padrões visuais.
+- Receba as Views/contextos criados e desenhe os templates correspondentes.
+""",
+    "e2e-tester": """---
+name: e2e-tester
+description: Especialista em testes E2E (Playwright/Behave) — simulação externa de UI.
+---
+# Agente: E2E Tester
+
+Você é um especialista em testes end-to-end (Playwright/Behave).
+
+- Escreva e/ou execute cenários E2E que simulam o usuário real.
+- Valide fluxos de interface (navegação, formulários, feedback visual).
+- Relate o resultado com evidências (screenshots/logs).
+- Não altere regra de negócio; apenas valide o comportamento externo.
+""",
+}
+
+
+def is_suap_project(root: Path) -> bool:
+    """Detecta (por heurística) se `root` é o projeto SUAP."""
+    root = Path(root)
+    if root.name.lower() == "suap" or (root / "suap").is_dir():
+        return True
+    manage = root / "manage.py"
+    if manage.is_file():
+        try:
+            if "suap" in manage.read_text(encoding="utf-8").lower():
+                return True
+        except (OSError, UnicodeDecodeError):
+            pass
+    return False
+
+
+def create_suap_defaults(root: Path) -> list[Path]:
+    """Cria as skills/agentes padrão quando o projeto é o SUAP.
+
+    Também renomeia a skill legada ``tdd`` para ``backend_tdd`` (caso o legado
+    a tenha importado) e ajusta o ``name:`` do frontmatter.
+
+    Retorna a lista de arquivos criados (vazia se não for SUAP ou já existirem).
+    """
+    if not is_suap_project(root):
+        return []
+
+    # O legado do SUAP usa o nome `tdd`; aqui a skill vira `backend_tdd`.
+    legacy_tdd = IAW_DIR / "skills" / "tdd"
+    backend_tdd = IAW_DIR / "skills" / "backend_tdd"
+    if legacy_tdd.is_dir() and not backend_tdd.exists():
+        legacy_tdd.rename(backend_tdd)
+        _rename_skill_name(backend_tdd, "tdd", "backend_tdd")
+
+    created: list[Path] = []
+    for name, content in SUAP_SKILLS.items():
+        skill_file = IAW_DIR / "skills" / name / "SKILL.md"
+        if not skill_file.exists():
+            skill_file.parent.mkdir(parents=True, exist_ok=True)
+            skill_file.write_text(content, encoding="utf-8")
+            created.append(skill_file)
+
+    for name, content in SUAP_AGENTS.items():
+        # O agente pode já ter vindo do legado (`.iaw/agents/<name>.md`) ou
+        # existir como diretório (`AGENT.md`/`SKILL.md`/`agent.md`).
+        if any([
+            (IAW_DIR / "agents" / f"{name}.md").is_file(),
+            (IAW_DIR / "agents" / name / "AGENT.md").is_file(),
+            (IAW_DIR / "agents" / name / "SKILL.md").is_file(),
+            (IAW_DIR / "agents" / name / "agent.md").is_file(),
+        ]):
+            continue
+        agent_file = IAW_DIR / "agents" / name / "AGENT.md"
+        agent_file.parent.mkdir(parents=True, exist_ok=True)
+        agent_file.write_text(content, encoding="utf-8")
+        created.append(agent_file)
+
+    return created
+
+
+def _rename_skill_name(skill_dir: Path, old: str, new: str) -> None:
+    """Atualiza o ``name:`` do frontmatter de um SKILL.md renomeado."""
+    skill_file = skill_dir / "SKILL.md"
+    if not skill_file.is_file():
+        return
+    text = skill_file.read_text(encoding="utf-8")
+    updated = re.sub(
+        rf"(?m)^name:\s*{re.escape(old)}\s*$", f"name: {new}", text, count=1
+    )
+    if updated != text:
+        skill_file.write_text(updated, encoding="utf-8")
+
+
 def ensure_structure() -> None:
     """Cria a estrutura de diretórios da `.iaw/` se ainda não existir."""
     for sub in ("workflows", "skills", "agents", "templates", "hooks", "evals"):
@@ -317,5 +559,5 @@ def write_default_files(stack: str, testes: str) -> None:
 
 
 def init_project(stack: str, testes: str) -> None:
-    """Inicializa a estrutura `.iaw/` completa."""
+    """Inicializa a estrutura `.iaw/` completa (base)."""
     write_default_files(stack, testes)

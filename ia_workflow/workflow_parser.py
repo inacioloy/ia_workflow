@@ -31,6 +31,8 @@ class Step:
     command: str | None = None
     skill: str | None = None
     agent: str | None = None
+    subagent: str | None = None
+    description: str = ""
     allow_no_change: bool = False
     require_human_approval: bool = False
     raw: dict[str, Any] = field(default_factory=dict)
@@ -101,6 +103,8 @@ def load_workflow(path: str | Path) -> Workflow:
                 command=raw.get("command"),
                 skill=str(raw["skill"]) if raw.get("skill") else None,
                 agent=str(raw["agent"]) if raw.get("agent") else None,
+                subagent=str(raw["subagent"]) if raw.get("subagent") else None,
+                description=str(raw.get("description") or ""),
                 allow_no_change=bool(raw.get("allow_no_change", False)),
                 require_human_approval=bool(raw.get("require_human_approval", False)),
                 raw=raw,

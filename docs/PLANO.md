@@ -45,7 +45,7 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 | 18 | Etapa opcional | `allow_no_change: true` → a IA responde `SEM_ALTERACOES_NECESSARIAS` e o orquestrador pula a etapa |
 | 19 | Log de execução | `iaw run --log` mostra prompt, contexto e saída da IA em cada etapa |
 | 20 | Tarefa explícita | `iaw run --issue-id <id>` (alias `--task`) indica a Issue sem depender da branch |
-| 21 | Execução local | `iaw run --no-publish` (alias `--local`) pula a etapa de MR/relatório |
+| 21 | Execução sem MR | `iaw run` por padrão não cria MR; use `iaw run --create-mr` para abrir |
 | 22 | Janela de contexto | `context_max_chars`/`context_max_file_chars` limitam o conteúdo anexado (engine-agnóstico) |
 | 23 | Reuso de sessão | Uma instância de engine por execução; Antigravity continua a conversa (`--conversation`) entre etapas |
 | 24 | Análise de contexto | `iaw analyze` gera stack.md/contexto.md a partir do fingerprint do projeto (com fallback heurístico) |

@@ -81,11 +81,13 @@ def resolve_expertise(
     *,
     skill: str | None = None,
     agent: str | None = None,
+    subagent: str | None = None,
 ) -> Expertise:
     """Resolve o especialista de um step.
 
-    - Se ``skill``/``agent`` existir, retorna o corpo encontrado.
-    - Se não existir, cai para a skill padrão com ``fallback=True``.
+    - ``skill`` → Agente Principal (``.iaw/skills/<nome>/SKILL.md``).
+    - ``subagent``/``agent`` → Especialista isolado (``.iaw/agents/<nome>``).
+    - Se o indicado não existir, cai para a skill padrão com ``fallback=True``.
     - Se nenhum for indicado, retorna corpo vazio (sem especialista).
     """
     if skill:
@@ -93,6 +95,11 @@ def resolve_expertise(
         if body:
             return Expertise(skill, body)
         return _fallback(iaw_dir, skill)
+    if subagent:
+        body = load_agent(iaw_dir, subagent)
+        if body:
+            return Expertise(subagent, body)
+        return _fallback(iaw_dir, subagent)
     if agent:
         body = load_agent(iaw_dir, agent)
         if body:

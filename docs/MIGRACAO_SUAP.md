@@ -34,7 +34,7 @@
 | Skill | Propósito |
 |-------|-----------|
 | `sentry-fix` | Corrige erro do Sentry ponta-a-ponta (fetch→fix→branch→testes→pre-commit→push→MR) |
-| `tdd` | Loop red-green-refactor, testes de integração via interface pública |
+| `tdd` → `backend_tdd` | Loop red-green-refactor, testes de integração via interface pública (pytest) |
 | `generate-test` | Gera testes Django/pytest para um MR (CI-ready) |
 | `generate-docstrings` | Reescreve docstrings pt-BR (Google style) nas defs tocadas |
 | `code-review` | Revisão multi-linguagem de PRs (assets + reference + scripts) |

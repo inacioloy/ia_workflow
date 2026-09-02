@@ -37,8 +37,8 @@ iaw init                       # cria a pasta .iaw/ no projeto atual
 iaw start-task 4512            # baixa a Issue do GitLab e gera o artefato
 iaw run --workflow bug_fix --issue-id 4512   # orquestra a IA (indicando a tarefa)
 iaw run --workflow bug_fix --issue-id 4512 --log   # idem, com log de execução da IA
-iaw run --workflow bug_fix --issue-id 4512 --no-publish   # idem, sem MR/relatório
-iaw finish-task                # resumo + MR + relatório
+iaw run --workflow bug_fix --issue-id 4512 --create-mr   # idem, abrindo MR ao final
+iaw finish-task                # resumo + relatório (+ MR com --create-mr)
 ```
 
 ## Motores de IA suportados
@@ -71,24 +71,24 @@ estourar a janela do modelo quando o `.iaw/` e os artefatos crescem.
 | **Graph Engineering** | Workflows YAML com `depends_on` e gates de aprovação |
 | **Skills / Agents** | Pacotes reutilizáveis em `.iaw/skills/` e `.iaw/agents/` |
 | **Skill padrão** | `.iaw/skills/default/` é criada no `init` e usada quando uma skill não existe |
-| **Especialista por etapa** | Cada step do workflow pode usar `skill:`/`agent:` (ex.: frontend-suap) |
+| **Especialista por etapa** | Cada step delega com `skill:` (Agente Principal) ou `subagent:` (Especialista) |
 | **Etapa opcional** | `allow_no_change: true` deixa a IA pular a etapa quando não há trabalho |
 | **Task-First** | Fluxo ancorado em Issues do GitLab |
 | **Evals / LLMOps** | Golden Dataset + LLM-as-a-Judge contra regressão |
 
-### Especialistas por etapa (`skill:` / `agent:`)
+### Especialistas por etapa (`skill:` / `subagent:`)
 
 ```yaml
 # .iaw/workflows/bug_fix.yaml
 steps:
   - id: 1_analisar_erro
     action: generate_artifact
-    skill: bug-analyst            # .iaw/skills/bug-analyst/SKILL.md
+    skill: sentry-fix           # Agente Principal (.iaw/skills/sentry-fix/SKILL.md)
 
   - id: 2_corrigir_frontend
     action: execute_ai_coding
-    skill: frontend-suap          # segue o design system do SUAP
-    allow_no_change: true         # pula se não houver ajuste de frontend
+    subagent: suap-frontend     # Especialista isolado (.iaw/agents/suap-frontend/)
+    allow_no_change: true       # pula se não houver ajuste de frontend
 ```
 
 ## Comandos
@@ -100,8 +100,8 @@ steps:
 | `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md (IA) |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
-| `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar MR/relatório) |
-| `iaw finish-task` | Abre MR e atualiza o relatório |
+| `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--create-mr]` | Orquestra o workflow (tarefa, log e/ou abrindo MR ao final) |
+| `iaw finish-task` | Atualiza o relatório (com `--create-mr`, abre o MR) |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Centraliza skills/agents do legado em `.iaw/` |
@@ -113,6 +113,7 @@ steps:
 
 | Documento | Conteúdo |
 |-----------|----------|
+| [Entendendo Workflows](docs/WORKFLOWS.md) | ⭐ Formato do YAML, ações, `skill:`/`subagent:`, gates e funcionamento |
 | [Guia do Desenvolvedor](docs/GUIA_DESENVOLVEDOR.md) | ⭐ Uso completo: conceitos, config, workflows, relatório, monitoramento |
 | [Exemplos de Fluxos Dev](docs/exemplos_fluxos_dev.md) | Passo a passo no SUAP (bug e nova funcionalidade) + como chamar o `iaw` |
 | [Plano de Implementação](docs/PLANO.md) | Fases, decisões e arquitetura |
@@ -131,7 +132,7 @@ ia_workflow/                 # repositório da ferramenta
 │   ├── evals.py             # Golden Dataset + LLM-as-a-Judge
 │   ├── skills.py            # gerenciador de skills
 │   ├── gitlab_client.py     # integração GitLab
-│   ├── publish.py           # finish-task (MR + relatório)
+│   ├── publish.py           # finish-task (resumo + relatório; MR opcional)
 │   ├── reports.py           # relatório mensal
 │   └── engines/             # Pi Coding (RPC), Aider e Antigravity (subprocess/CLI)
 └── docs/                    # documentação

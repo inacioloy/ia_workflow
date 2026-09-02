@@ -123,16 +123,17 @@ iaw run --workflow bug_fix --issue-id 4512
 # Para ver o log de execução da IA (prompt, contexto e saída):
 iaw run --workflow bug_fix --issue-id 4512 --log
 
-# Para rodar só as etapas locais (diagnóstico + fix + testes), SEM MR/relatório:
-iaw run --workflow bug_fix --issue-id 4512 --no-publish
+# Para abrir o MR ao final (por padrão, não cria MR):
+iaw run --workflow bug_fix --issue-id 4512 --create-mr
 ```
 
 | Etapa | Ação | Você precisa? |
 |-------|------|---------------|
-| `1_analisar_erro` | IA gera o diagnóstico → `.iaw_workspace/1_diagnostico_bug.md` | **Aprovar** (gate) |
-| `2_corrigir_codigo` | IA corrige o código | Não (autônoma) |
-| `3_prova_testes` | Roda `pytest -q` | Não |
-| `4_abrir_mr` | Resumo + **abre o MR** + registra no relatório | Não |
+| `1_analisar_erro` | IA (skill sentry-fix) gera o diagnóstico → `.iaw_workspace/1_diagnostico_bug.md` | **Aprovar** (gate) |
+| `2_teste_red` | IA (skill backend_tdd) escreve um teste que falha (Red) | Não |
+| `3_corrigir_codigo` | IA (skill sentry-fix) corrige o código | Não (autônoma) |
+| `4_prova_testes` | Roda `pytest -q` | Não |
+| `5_abrir_mr` | Resumo + relatório (+ MR com `--create-mr`) | Não |
 
 ### 5. Acompanhe
 
@@ -140,11 +141,12 @@ iaw run --workflow bug_fix --issue-id 4512 --no-publish
 iaw status            # histórico de execuções
 ```
 
-**Resultado esperado**: MR aberto no GitLab (com `Closes #4512`) e atividade
-registrada em `~/.config/ia_workflow/reports/<mes>_<ano>.md`.
+**Resultado esperado**: atividade registrada em
+`~/.config/ia_workflow/reports/<mes>_<ano>.md` (e, com `--create-mr`, MR aberto
+no GitLab com `Closes #4512`).
 
 > Alternativa manual: se preferir controlar a publicação, use `iaw finish-task`
-> (ou `--no-mr` para só atualizar o relatório).
+> (ou `--create-mr` para abrir o MR).
 
 ---
 
@@ -164,7 +166,7 @@ git checkout -b iaw/issue-4540
 iaw start-task 4540
 ```
 
-### 3. Prepare a prova visual (etapa 4b)
+### 3. Prepare a prova visual (etapa 4c)
 
 ```bash
 # Playwright + chromium (se ainda não instalou)
@@ -185,10 +187,12 @@ iaw run --workflow nova_feature --issue-id 4540 --notify
 |-------|------|---------------|
 | `1_entendimento_problema` | IA faz perguntas para fechar a regra de negócio | **Aprovar** |
 | `2_planejamento_arquitetura` | IA gera a spec técnica (models/views) | **Aprovar** |
-| `3_materializacao_codigo` | IA escreve o código | Não |
+| `3a_materializacao_backend` | IA (skill backend_tdd) implementa o backend | Não |
+| `3b_materializacao_frontend` | Subagente suap-frontend desenha os templates (Design System) | Não |
 | `4a_prova_testes` | Roda `pytest -q` | Não |
-| `4b_prova_visual_browser` | Abre o navegador e tira **screenshot** da tela | Não |
-| `5_consolidacao_relatorio` | Resumo + **MR** + **relatório** | Não |
+| `4b_prova_e2e` | Subagente e2e-tester valida o fluxo de UI | Não |
+| `4c_prova_visual_browser` | Abre o navegador e tira **screenshot** da tela | Não |
+| `5_consolidacao_relatorio` | Resumo + relatório (+ MR com `--create-mr`) | Não |
 
 `--notify` avisa no desktop ao terminar — você pode sair da frente do
 computador **após aprovar a spec na etapa 2**.

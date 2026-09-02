@@ -79,7 +79,7 @@ def _step_prompt(step: Step, iaw_dir: Path) -> str:
         base = fallback.get(step.action, f"Execute a etapa '{step.id}' ({step.action}).")
 
     exp = expertise.resolve_expertise(
-        iaw_dir, skill=step.skill, agent=step.agent
+        iaw_dir, skill=step.skill, agent=step.agent, subagent=step.subagent
     )
     if exp.body:
         aviso = ""
@@ -115,8 +115,23 @@ def _resolve_artifact_path(rel: str, working_dir: Path, task_dir: Path) -> Path:
 
 
 def _step_context_files(step: Step, working_dir: Path, task_dir: Path) -> list[Path]:
-    """Reúne os arquivos de contexto (inputs + context + artefatos do workspace)."""
+    """Reúne os arquivos de contexto (Context as Code + inputs + context + workspace).
+
+    ``.iaw/stack.md`` e ``.iaw/contexto.md`` são o contexto **padrão** de toda
+    etapa; só deixam de ser injetados quando o step declara ``context:``
+    explicitamente (aí o workflow assume o controle).
+    """
     files: list[Path] = []
+
+    iaw_dir = working_dir / project.IAW_DIR
+
+    # Contexto padrão (Context as Code): stack.md + contexto.md.
+    if not step.context:
+        for rel in ("stack.md", "contexto.md"):
+            path = iaw_dir / rel
+            if path.is_file() and path not in files:
+                files.append(path)
+
     for rel in step.input_files() + step.context:
         path = _resolve_artifact_path(rel, working_dir, task_dir)
         if path.is_file() and path not in files:
@@ -148,7 +163,7 @@ def execute_step(
     stream: Callable[[str], None] | None = None,
     log: bool = False,
     engine: AIEngine | None = None,
-    no_publish: bool = False,
+    create_mr: bool = False,
 ) -> EngineResult:
     """Executa um único step e devolve o resultado.
 
@@ -156,11 +171,13 @@ def execute_step(
         e a saída/erro do motor (log de execução).
     :param engine: instância do motor reutilizada ao longo do workflow (permite
         reuso de sessão quando o engine suporta).
-    :param no_publish: se True, a etapa de publicação (MR/relatório) é pulada.
+    :param create_mr: se True, abre o Merge Request na etapa de publicação
+        (por padrão, apenas gera resumo e registra no relatório).
     """
+    iaw_dir = working_dir / project.IAW_DIR
+
     if step.action in ENGINE_ACTIONS:
         engine = engine or build_engine()
-        iaw_dir = working_dir / project.IAW_DIR
         prompt = _step_prompt(step, iaw_dir)
         context_files = _step_context_files(step, working_dir, task_dir)
 
@@ -173,6 +190,8 @@ def execute_step(
                 for f in context_files:
                     console.print(f"[dim]  • {f}[/dim]")
             console.print("[dim]── saída da IA ──[/dim]")
+
+        console.print(f"[dim]→ Motor de IA ({getattr(engine, 'name', 'engine')}): {step.action}…[/dim]")
 
         result = engine.generate(
             prompt,
@@ -215,6 +234,7 @@ def execute_step(
     if step.action in BROWSER_ACTIONS:
         config = step.raw.get("config") or {}
         start_url = config.get("start_url", "http://localhost:8000/")
+        console.print(f"[dim]→ Prova visual (browser): {start_url}…[/dim]")
         auth_script = config.get("auth_script")
         output = (
             step.output_files()[0]
@@ -230,14 +250,15 @@ def execute_step(
             return EngineResult(success=False, error=str(exc))
 
     if step.action in PUBLISH_ACTIONS:
-        if no_publish:
-            console.print(
-                "[yellow]⚠ Publicação desativada (--no-publish):[/yellow] "
-                "etapa de MR/relatório pulada."
-            )
-            return EngineResult(success=True, output="")
+        exp = expertise.resolve_expertise(
+            iaw_dir, skill=step.skill, agent=step.agent, subagent=step.subagent
+        )
+        modo = "resumo + relatório + MR" if create_mr else "resumo + relatório (sem MR)"
+        console.print(f"[dim]→ Consolidação: {modo}.[/dim]")
         try:
-            result = publish.publish_task()
+            result = publish.publish_task(
+                create_mr=create_mr, summary_instructions=exp.body or ""
+            )
             return EngineResult(
                 success=True,
                 output=f"Tarefa publicada: {result['mr_url'] or 'sem MR'}",
@@ -258,7 +279,7 @@ def run_workflow(
     resume: bool = False,
     issue_id: int | None = None,
     log: bool = False,
-    no_publish: bool = False,
+    create_mr: bool = False,
 ) -> int:
     """Executa um workflow do início ao fim.
 
@@ -267,7 +288,7 @@ def run_workflow(
     :param issue_id: Id da Issue/tarefa alvo; se omitido, é inferido da branch
         ou do workspace (`.iaw_workspace/issue-<id>`).
     :param log: se True, mostra o log de execução da IA (prompt, contexto e saída).
-    :param no_publish: se True, pula a etapa de publicação (MR/relatório).
+    :param create_mr: se True, abre o Merge Request ao final (padrão: não cria MR).
     :return: código de saída (0 = sucesso, 1 = falha).
     """
     cwd = working_dir or Path.cwd()
@@ -307,13 +328,26 @@ def run_workflow(
             f"[dim]Retomando: {len(completed)} etapa(s) concluída(s) serão puladas.[/dim]\n"
         )
 
-    for step in steps:
+    total_steps = len(steps)
+    for idx, step in enumerate(steps, 1):
         if resume and step.id in completed:
-            console.print(f"[dim]⏭ Etapa {step.id} — já concluída (pulada)[/dim]")
+            console.print(f"[dim]⏭ Etapa {idx}/{total_steps} {step.id} — já concluída (pulada)[/dim]")
             continue
 
-        approval = " [bold yellow]🔒 aprovação humana[/bold yellow]" if step.require_human_approval else ""
-        console.print(f"[bold blue]▸ Etapa[/bold blue] {step.id} — {step.action}{approval}")
+        console.print(f"\n[bold blue]▸ Etapa {idx}/{total_steps}: {step.id}[/bold blue]")
+        console.print(f"  [cyan]Ação:[/cyan] {step.action or '(sem ação)'}")
+        if step.description:
+            console.print(f"  [cyan]Descrição:[/cyan] {step.description}")
+        delegate = step.skill or step.subagent or step.agent
+        if delegate:
+            tipo = "subagente" if (step.subagent or step.agent) else "skill"
+            console.print(f"  [cyan]Delegado ({tipo}):[/cyan] {delegate}")
+        if step.require_human_approval:
+            console.print("  [bold yellow]🔒 Requer aprovação humana[/bold yellow]")
+        if step.input_files():
+            console.print(f"  [dim]Entradas: {', '.join(step.input_files())}[/dim]")
+        if step.output_files():
+            console.print(f"  [dim]Saídas: {', '.join(step.output_files())}[/dim]")
 
         result = execute_step(
             step,
@@ -322,13 +356,15 @@ def run_workflow(
             stream=stream,
             log=log,
             engine=engine,
-            no_publish=no_publish,
+            create_mr=create_mr,
         )
 
         if not result.success:
             console.print(f"[red]✗ Falha na etapa '{step.id}':[/red] {escape(result.error)}")
             console.print("[red]Fluxo interrompido.[/red]")
             return 1
+
+        console.print(f"[green]✓ Etapa {step.id} concluída.[/green]")
 
         if (
             result.output
