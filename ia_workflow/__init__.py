@@ -1,4 +1,4 @@
-"""IA Workflow (iaw) — orquestrador de IA para desenvolvimento assistido no IFRN."""
+"""IA Workflow (iaw) — orquestrador de IA para desenvolvimento assistido."""
 
 __version__ = "0.1.0"
 __app_name__ = "ia_workflow"

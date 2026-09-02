@@ -1,4 +1,4 @@
-"""Publicação da tarefa (resumo + MR + relatório PGD).
+"""Publicação da tarefa (resumo + MR + relatório).
 
 Fluxo usado pelo `iaw finish-task` e pelo step `generate_summary_and_publish`
 dos workflows: gera o diff, pede o resumo executivo à IA, abre o MR no GitLab

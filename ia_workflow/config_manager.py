@@ -2,7 +2,7 @@
 
 A configuração fica em ``~/.config/ia_workflow/config.toml`` e guarda apenas
 dados sensíveis/pessoais (tokens, engine preferida, nome do dev, caminho do
-relatório PGD). As regras do projeto ficam na pasta ``.iaw/`` do repositório.
+relatório). As regras do projeto ficam na pasta ``.iaw/`` do repositório.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "context_max_chars": 80000,
     "context_max_file_chars": 20000,
     "dev_name": "",
-    "pgd_report_path": str(REPORTS_DIR),
+    "relatorio_path": str(REPORTS_DIR),
     "auto_write_files": True,
     "notify_webhook": "",
 }

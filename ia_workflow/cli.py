@@ -33,7 +33,7 @@ from .workflow_parser import WorkflowError, available_workflows
 
 app = typer.Typer(
     name="iaw",
-    help="IA Workflow: orquestrador de IA para o IFRN (Artifact-Driven + Graph Engineering).",
+    help="IA Workflow: orquestrador de IA (Artifact-Driven + Graph Engineering).",
     no_args_is_help=True,
 )
 config_app = typer.Typer(help="Gerencia a configuração global (~/.config/ia_workflow/config.toml).")
@@ -48,14 +48,14 @@ console = Console()
 # --------------------------------------------------------------------------- #
 # setup / config
 # --------------------------------------------------------------------------- #
-@app.command(help="Configura as credenciais globais da ferramenta (token GitLab, engine, PGD).")
+@app.command(help="Configura as credenciais globais da ferramenta (token GitLab, engine).")
 def setup() -> None:
     """Configura as credenciais globais da ferramenta (uma única vez)."""
     console.print("[bold blue]=== Configuração do IA Workflow (iaw) ===[/bold blue]\n")
 
     token = typer.prompt("Personal Access Token do GitLab", hide_input=True, default="")
     gitlab_url = typer.prompt(
-        "URL do GitLab", default="https://gitlab.ifrn.edu.br"
+        "URL do GitLab", default="https://gitlab.com"
     )
     gitlab_project = typer.prompt(
         "Projeto padrão no GitLab (path, ex: cosinf/suap)", default=""
@@ -68,9 +68,9 @@ def setup() -> None:
             f"[yellow]Aviso:[/yellow] '{engine}' não é um motor reconhecido "
             f"({', '.join(available_engines())}). Você poderá corrigir com `iaw config set default_engine <nome>`."
         )
-    dev_name = typer.prompt("Seu nome (para o relatório PGD)", default="")
-    pgd_path = typer.prompt(
-        "Diretório dos relatórios PGD", default=cfg.REPORTS_DIR.as_posix()
+    dev_name = typer.prompt("Seu nome (para o relatório)", default="")
+    relatorio_path = typer.prompt(
+        "Diretório dos relatórios", default=cfg.REPORTS_DIR.as_posix()
     )
 
     updates = {
@@ -79,7 +79,7 @@ def setup() -> None:
         "gitlab_project": gitlab_project,
         "default_engine": engine,
         "dev_name": dev_name,
-        "pgd_report_path": pgd_path,
+        "relatorio_path": relatorio_path,
     }
     config = cfg.load_config()
     config.update(updates)
@@ -365,7 +365,7 @@ def run(
         False,
         "--no-publish",
         "--local",
-        help="Não cria MR nem registra no PGD (pula a etapa de publicação).",
+        help="Não cria MR nem registra no relatório (pula a etapa de publicação).",
     ),
 ) -> None:
     """Aciona o motor de IA para rodar o fluxo definido em .iaw/workflows."""
@@ -404,7 +404,7 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
-@app.command("finish-task", help="Encerra a tarefa: resumo + MR + relatório PGD.")
+@app.command("finish-task", help="Encerra a tarefa: resumo + MR + relatório.")
 def finish_task(
     issue_id: int = typer.Option(None, "--issue-id", help="Id da Issue (se não puder inferir da branch)."),
     summary: str = typer.Option(None, "--summary", help="Resumo manual (pula a geração via IA)."),
@@ -412,7 +412,7 @@ def finish_task(
     no_mr: bool = typer.Option(False, "--no-mr", help="Não criar MR (só atualiza o relatório)."),
     keep_workspace: bool = typer.Option(False, "--keep-workspace", help="Mantém .iaw_workspace/ após concluir."),
 ) -> None:
-    """Encerra a tarefa: gera resumo, abre MR e atualiza o relatório PGD."""
+    """Encerra a tarefa: gera resumo, abre MR e atualiza o relatório."""
     try:
         result = publish.publish_task(
             issue_id=issue_id,

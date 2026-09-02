@@ -1,7 +1,7 @@
-"""Relatório mensal PGD (Programa de Gestão e Desempenho).
+"""Relatório mensal de atividades.
 
 O relatório fica **fora do repositório**, no diretório global configurado em
-``pgd_report_path``. Um arquivo por mês (ex: ``agosto_2026.md``).
+``relatorio_path``. Um arquivo por mês (ex: ``agosto_2026.md``).
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ MESES = [
 def monthly_report_path(config: dict | None = None) -> Path:
     """Caminho do relatório do mês/ano atuais."""
     config = config or cfg.load_config()
-    base = Path(config.get("pgd_report_path") or cfg.REPORTS_DIR).expanduser()
+    base = Path(config.get("relatorio_path") or cfg.REPORTS_DIR).expanduser()
     now = datetime.now()
     return base / f"{MESES[now.month - 1]}_{now.year}.md"
 
@@ -32,7 +32,7 @@ def ensure_report_header(path: Path) -> None:
     now = datetime.now()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
-        f"# Relatório de Atividades PGD - {MESES[now.month - 1].capitalize()}/{now.year}\n",
+        f"# Relatório de Atividades - {MESES[now.month - 1].capitalize()}/{now.year}\n",
         encoding="utf-8",
     )
 

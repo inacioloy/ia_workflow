@@ -156,7 +156,7 @@ def execute_step(
         e a saída/erro do motor (log de execução).
     :param engine: instância do motor reutilizada ao longo do workflow (permite
         reuso de sessão quando o engine suporta).
-    :param no_publish: se True, a etapa de publicação (MR/PGD) é pulada.
+    :param no_publish: se True, a etapa de publicação (MR/relatório) é pulada.
     """
     if step.action in ENGINE_ACTIONS:
         engine = engine or build_engine()
@@ -233,7 +233,7 @@ def execute_step(
         if no_publish:
             console.print(
                 "[yellow]⚠ Publicação desativada (--no-publish):[/yellow] "
-                "etapa de MR/PGD pulada."
+                "etapa de MR/relatório pulada."
             )
             return EngineResult(success=True, output="")
         try:
@@ -267,7 +267,7 @@ def run_workflow(
     :param issue_id: Id da Issue/tarefa alvo; se omitido, é inferido da branch
         ou do workspace (`.iaw_workspace/issue-<id>`).
     :param log: se True, mostra o log de execução da IA (prompt, contexto e saída).
-    :param no_publish: se True, pula a etapa de publicação (MR/PGD).
+    :param no_publish: se True, pula a etapa de publicação (MR/relatório).
     :return: código de saída (0 = sucesso, 1 = falha).
     """
     cwd = working_dir or Path.cwd()

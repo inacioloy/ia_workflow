@@ -7,7 +7,7 @@ COMMAND_HELP: dict[str, dict] = {
         "resumo": "Configura as credenciais globais da ferramenta (uma única vez).",
         "detalhe": (
             "Assistente interativo que pergunta token do GitLab, URL do GitLab, "
-            "projeto padrão, motor de IA, seu nome e diretório dos relatórios PGD. "
+            "projeto padrão, motor de IA, seu nome e diretório dos relatórios. "
             "Grava tudo em ~/.config/ia_workflow/config.toml."
         ),
         "exemplos": ["iaw setup"],
@@ -18,7 +18,7 @@ COMMAND_HELP: dict[str, dict] = {
             "Lê e grava chaves do ~/.config/ia_workflow/config.toml. "
             "O token do GitLab é sempre mascarado na exibição.\n"
             "Chaves: gitlab_url, gitlab_token, gitlab_project, default_engine, "
-            "default_model, default_agent, dev_name, pgd_report_path, "
+            "default_model, default_agent, dev_name, relatorio_path, "
             "auto_write_files, skill_repo, context_max_chars, "
             "context_max_file_chars."
         ),
@@ -72,7 +72,7 @@ COMMAND_HELP: dict[str, dict] = {
             "Use --issue-id (ou --task) para indicar a tarefa alvo; senão o id "
             "é inferido da branch ou do workspace. --notify avisa ao terminar. "
             "--log mostra o log de execução da IA (prompt, contexto e saída). "
-            "--no-publish (ou --local) roda sem criar MR nem registrar no PGD.\n"
+            "--no-publish (ou --local) roda sem criar MR nem registrar no relatório.\n"
             "Cada step pode ter `skill:` ou `agent:` para usar um especialista "
             "(.iaw/skills/<nome>/SKILL.md ou .iaw/agents/<nome>.md). "
             "`allow_no_change: true` permite à IA pular a etapa quando nada "
@@ -85,10 +85,10 @@ COMMAND_HELP: dict[str, dict] = {
         ],
     },
     "finish-task": {
-        "resumo": "Encerra a tarefa: resumo + MR + relatório PGD.",
+        "resumo": "Encerra a tarefa: resumo + MR + relatório.",
         "detalhe": (
             "Gera o git diff, pede resumo executivo à IA, abre o Merge Request "
-            "no GitLab e registra a atividade no relatório mensal do PGD. "
+            "no GitLab e registra a atividade no relatório mensal. "
             "Limpa o .iaw_workspace/ ao final."
         ),
         "exemplos": [
@@ -117,7 +117,7 @@ COMMAND_HELP: dict[str, dict] = {
         "exemplos": [
             "iaw skill list",
             "iaw skill create frontend-suap --description \"Design system do SUAP\"",
-            "iaw skill add django-security --source https://github.com/ifrn/ia-skills.git",
+            "iaw skill add django-security --source https://github.com/sua-org/ia-skills.git",
             "iaw skill update",
         ],
     },

@@ -7,9 +7,9 @@
 
 ## 1. Problemática
 
-- **Falta de padronização**: desenvolvedores do IFRN usam IAs diferentes (Claude, OpenCode, Codex, Pi, etc.) de forma isolada e sem estrutura para evoluir o SUAP (Python/Django/PostgreSQL).
+- **Falta de padronização**: desenvolvedores usam IAs diferentes (Claude, OpenCode, Codex, Pi, etc.) de forma isolada e sem estrutura para evoluir o SUAP (Python/Django/PostgreSQL).
 - **Alucinação arquitetural**: prompts ad-hoc sem contexto fazem a IA sugerir padrões/bibliotecas que violam as regras do projeto.
-- **Desconexão burocrática**: o fluxo técnico ignora a necessidade de rastreabilidade institucional — vincular o trabalho a Issues/MRs no GitLab e ao relatório mensal do PGD.
+- **Desconexão burocrática**: o fluxo técnico ignora a necessidade de rastreabilidade institucional — vincular o trabalho a Issues/MRs no GitLab e ao relatório mensal.
 
 ## 2. Solução consolidada
 
@@ -18,7 +18,7 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 1. Lê a pasta **`.iaw/`** (Context as Code) versionada dentro de cada projeto;
 2. Orquestra a IA via **Graph Engineering** (workflows em YAML) + **Artifact-Driven Development** (artefatos validados antes do código);
 3. Integra **GitLab** (Issue → artefato → código → MR);
-4. Gera o **relatório mensal do PGD** automaticamente;
+4. Gera o **relatório mensal** automaticamente;
 5. É **agnóstica de motor de IA** (Pi Coding, Aider, Claude etc.).
 
 ## 3. Decisões tomadas
@@ -27,14 +27,14 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 |---|------|---------|
 | 1 | Nome | Repositório `ia_workflow`, comando CLI **`iaw`** |
 | 2 | Pasta de contexto | **`.iaw/`** (versionada no Git, com README auto-gerado) |
-| 3 | Config global | `~/.config/ia_workflow/config.toml` (token GitLab, engine, nome, caminho PGD) |
+| 3 | Config global | `~/.config/ia_workflow/config.toml` (token GitLab, engine, nome, caminho do relatório) |
 | 4 | Estrutura `.iaw/` | `workflows/`, `skills/`, `templates/`, `stack.md`, `README.md`, `evals/` |
 | 5 | Comandos | `setup`, `init`, `analyze`, `start-task`, `run`, `finish-task`, `status`, `config set`, `skill add/update`, `eval` |
 | 6 | Workflows por cenário | `bug_fix`, `nova_feature`, `refatoracao` |
 | 7 | Motor agnóstico | Padrão Adapter: `PiCodingEngine`, `AiderEngine`, `AntigravityEngine` (config `default_engine`) |
 | 8 | Metodologia | 5 etapas da Attekita: Entendimento → Planejamento → Código → Prova → Consolidação |
 | 9 | Artefatos transitórios | Pasta `.iaw_workspace/` (limpa no final da task) |
-| 10 | Relatório mensal | Fora do repo, em diretório global (`pgd_report_path`), 1 arquivo/mês (`agosto_2026.md`) |
+| 10 | Relatório mensal | Fora do repo, em diretório global (`relatorio_path`), 1 arquivo/mês (`agosto_2026.md`) |
 | 11 | Licença | **MIT** |
 | 12 | Monitoramento | `--detach`/`--notify`, notificações desktop/webhook, comando `iaw status` |
 | 13 | Permissões | 3 camadas: config global (`auto_write_files`), `stack.md` (sandbox), workflow (`require_human_approval`) |
@@ -45,7 +45,7 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 | 18 | Etapa opcional | `allow_no_change: true` → a IA responde `SEM_ALTERACOES_NECESSARIAS` e o orquestrador pula a etapa |
 | 19 | Log de execução | `iaw run --log` mostra prompt, contexto e saída da IA em cada etapa |
 | 20 | Tarefa explícita | `iaw run --issue-id <id>` (alias `--task`) indica a Issue sem depender da branch |
-| 21 | Execução local | `iaw run --no-publish` (alias `--local`) pula a etapa de MR/PGD |
+| 21 | Execução local | `iaw run --no-publish` (alias `--local`) pula a etapa de MR/relatório |
 | 22 | Janela de contexto | `context_max_chars`/`context_max_file_chars` limitam o conteúdo anexado (engine-agnóstico) |
 | 23 | Reuso de sessão | Uma instância de engine por execução; Antigravity continua a conversa (`--conversation`) entre etapas |
 | 24 | Análise de contexto | `iaw analyze` gera stack.md/contexto.md a partir do fingerprint do projeto (com fallback heurístico) |
@@ -73,10 +73,10 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 - [x] `iaw run` (orquestrador `runner.py`: ações de engine, comandos de terminal, gates de aprovação)
 - [x] `iaw skill list/add/update` (carregador de skills de repo central, local ou Git)
 
-### Fase 4 — Prova Visual + PGD ✅ concluída
+### Fase 4 — Prova Visual + relatório ✅ concluída
 - [x] Browser Harness (`browser_harness.py` com Playwright headless + screenshot)
 - [x] `iaw finish-task` (git diff → resumo via IA → cria MR no GitLab → append no relatório mensal)
-- [x] Relatório PGD (`reports.py`, arquivo por mês em `pgd_report_path`)
+- [x] Relatório mensal (`reports.py`, arquivo por mês em `relatorio_path`)
 - [x] `iaw status` (registro de tarefas em `state.py`) + notificações (`notify.py`)
 
 ### Fase 5 — Evals / LLMOps (qualidade) ✅ concluída
@@ -122,5 +122,5 @@ ia_workflow/                      # repositório da ferramenta
 
 ~/.config/ia_workflow/            # config global (por máquina)
 ├── config.toml
-└── reports/                      # relatórios mensais PGD (fora do Git)
+└── reports/                      # relatórios mensais (fora do Git)
 ```

@@ -63,10 +63,10 @@ iaw run --workflow bug_fix --issue-id 4512   # iaw chama o pytest que estiver no
 # 1. Configurar o iaw (token do GitLab com permissão de API)
 iaw setup
 #   → token GitLab
-#   → URL: https://gitlab.ifrn.edu.br
+#   → URL: https://gitlab.com
 #   → projeto: cosinf/suap
 #   → motor: antigravity   (ou pi-coding / aider)
-#   → seu nome (para o PGD)
+#   → seu nome (para o relatório)
 
 # Se usar Antigravity (sem API key), defina também o modelo:
 iaw config set default_engine antigravity
@@ -123,7 +123,7 @@ iaw run --workflow bug_fix --issue-id 4512
 # Para ver o log de execução da IA (prompt, contexto e saída):
 iaw run --workflow bug_fix --issue-id 4512 --log
 
-# Para rodar só as etapas locais (diagnóstico + fix + testes), SEM MR/PGD:
+# Para rodar só as etapas locais (diagnóstico + fix + testes), SEM MR/relatório:
 iaw run --workflow bug_fix --issue-id 4512 --no-publish
 ```
 
@@ -132,7 +132,7 @@ iaw run --workflow bug_fix --issue-id 4512 --no-publish
 | `1_analisar_erro` | IA gera o diagnóstico → `.iaw_workspace/1_diagnostico_bug.md` | **Aprovar** (gate) |
 | `2_corrigir_codigo` | IA corrige o código | Não (autônoma) |
 | `3_prova_testes` | Roda `pytest -q` | Não |
-| `4_abrir_mr` | Resumo + **abre o MR** + registra no PGD | Não |
+| `4_abrir_mr` | Resumo + **abre o MR** + registra no relatório | Não |
 
 ### 5. Acompanhe
 
@@ -188,7 +188,7 @@ iaw run --workflow nova_feature --issue-id 4540 --notify
 | `3_materializacao_codigo` | IA escreve o código | Não |
 | `4a_prova_testes` | Roda `pytest -q` | Não |
 | `4b_prova_visual_browser` | Abre o navegador e tira **screenshot** da tela | Não |
-| `5_consolidacao_relatorio` | Resumo + **MR** + **PGD** | Não |
+| `5_consolidacao_relatorio` | Resumo + **MR** + **relatório** | Não |
 
 `--notify` avisa no desktop ao terminar — você pode sair da frente do
 computador **após aprovar a spec na etapa 2**.
@@ -269,13 +269,13 @@ iaw run --workflow bug_fix_por_area --issue-id 4600 --log
 - A IA **nunca faz merge** — só abre o MR; o merge é revisão humana no GitLab.
 - Se testes/validação falham, o fluxo **interrompe** (fail-safe).
 - Você corrige **documentos** (artefatos) antes do código, não o código.
-- Tudo fica rastreável: Issue → artefatos → código → MR → PGD.
+- Tudo fica rastreável: Issue → artefatos → código → MR → relatório.
 
 ## Fluxo mental (resumo)
 
 ```
 git branch → iaw start-task → REVISAR artefato → iaw run (aprovando gates)
-           → MR automático → PGD registrado → code review humano no GitLab
+           → MR automático → relatório registrado → code review humano no GitLab
 
 # quer enxergar o que a IA está fazendo em cada etapa?
 #   iaw run --workflow <nome> --issue-id <id> --log

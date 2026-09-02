@@ -33,7 +33,7 @@ Este diretório contém as regras de negócio, arquitetura e fluxos de trabalho
 1. `iaw init` — reconfigura o contexto deste projeto.
 2. `iaw start-task <id_gitlab>` — inicia uma tarefa a partir de uma Issue do GitLab.
 3. `iaw run` — orquestra a IA pelo workflow configurado.
-4. `iaw finish-task` — audita o código, abre o MR e atualiza o relatório PGD.
+4. `iaw finish-task` — audita o código, abre o MR e atualiza o relatório.
 
 *Importante: nunca versione credenciais/tokens aqui. Use `iaw config set` para a sua máquina.*
 """
@@ -97,7 +97,7 @@ steps:
     outputs:
       - file: .iaw_workspace/screenshot_prova.png
 
-  # ETAPA 5: CONSOLIDAÇÃO + PGD
+  # ETAPA 5: CONSOLIDAÇÃO + RELATÓRIO
   - id: 5_consolidacao_relatorio
     depends_on: [4b_prova_visual_browser]
     action: generate_summary_and_publish
@@ -106,7 +106,7 @@ steps:
           action: create_merge_request
       - local_fs:
           action: append_to_file
-          target: "{{pgd_report_path}}/{{mes_ano}}.md"
+          target: "{{relatorio_path}}/{{mes_ano}}.md"
 """
 
 WORKFLOW_BUG_FIX = """# Workflow: correção de bug (direto, focado no traceback)

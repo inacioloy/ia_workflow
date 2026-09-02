@@ -1,6 +1,6 @@
 # Guia do Desenvolvedor — IA Workflow (`iaw`)
 
-> Guia completo para desenvolvedores do IFRN usarem o `iaw` no dia a dia.
+> Guia completo para desenvolvedores usarem o `iaw` no dia a dia.
 > Leitura recomendada antes do primeiro uso. Complementa o [README](../README.md),
 > os [exemplos de fluxos de dev](exemplos_fluxos_dev.md) e o [plano de implementação](PLANO.md).
 
@@ -31,7 +31,7 @@ A IA **não** recebe "crie o módulo X" e sai codando. O fluxo é quebrado em
 
 ```
 Issue → 1_requisitos_validados.md → (aprovação) → 2_especificacao_tecnica.md
-      → (aprovação) → código → testes → MR → relatório PGD
+      → (aprovação) → código → testes → MR → relatório
 ```
 
 Se a IA entendeu errado a regra de negócio, você corrige o **documento**, não o código.
@@ -46,7 +46,7 @@ A CLI orquestra a execução e **bloqueia** o avanço se uma etapa falhar.
 
 ### 1.5 Task-First
 O trabalho começa por uma **Issue do GitLab** (`iaw start-task <id>`), não por um
-prompt solto. Tudo fica rastreável: Issue → artefatos → código → MR → PGD.
+prompt solto. Tudo fica rastreável: Issue → artefatos → código → MR → relatório.
 
 ### 1.6 Evals / LLMOps
 Skills e agents são testados contra um **Golden Dataset** com um **LLM-as-a-Judge**.
@@ -75,17 +75,17 @@ iaw setup
 
 O assistente pergunta:
 - **Token do GitLab** (Personal Access Token)
-- **URL do GitLab** (ex.: `https://gitlab.ifrn.edu.br`)
+- **URL do GitLab** (ex.: `https://gitlab.com`)
 - **Projeto padrão** (ex.: `cosinf/suap`)
 - **Motor de IA** (`pi-coding`, `aider` ou `antigravity`)
-- **Seu nome** (para o relatório PGD)
-- **Diretório dos relatórios PGD** (padrão: `~/.config/ia_workflow/reports`)
+- **Seu nome** (para o relatório)
+- **Diretório dos relatórios** (padrão: `~/.config/ia_workflow/reports`)
 
 ### 2.3 Config global vs. local
 
 | Escopo | Local | O que guarda |
 |--------|-------|--------------|
-| **Global** (máquina) | `~/.config/ia_workflow/config.toml` | token, engine, nome, caminho PGD |
+| **Global** (máquina) | `~/.config/ia_workflow/config.toml` | token, engine, nome, caminho do relatório |
 | **Local** (projeto) | `./.iaw/` | stack, workflows, skills, contexto |
 
 Gerencie a config com:
@@ -97,7 +97,7 @@ iaw config list
 ```
 
 Chaves: `gitlab_url`, `gitlab_token`, `gitlab_project`, `default_engine`,
-`default_model`, `default_agent`, `dev_name`, `pgd_report_path`,
+`default_model`, `default_agent`, `dev_name`, `relatorio_path`,
 `auto_write_files`, `antigravity_skip_permissions`, `skill_repo`,
 `context_max_chars`, `context_max_file_chars`.
 
@@ -205,10 +205,10 @@ iaw start-task 4512
 iaw run --workflow nova_feature --issue-id 4512
 #    Para ver o log de execução da IA (prompt, contexto e saída):
 iaw run --workflow nova_feature --issue-id 4512 --log
-#    Para rodar só as etapas locais (sem MR e sem PGD):
+#    Para rodar só as etapas locais (sem MR e sem relatório):
 iaw run --workflow nova_feature --issue-id 4512 --no-publish
 
-# 4. Encerra: resumo + MR + relatório PGD
+# 4. Encerra: resumo + MR + relatório
 iaw finish-task
 ```
 
@@ -231,12 +231,12 @@ Opções úteis do `iaw run`:
 ```bash
 # --issue-id (ou --task) indica a tarefa; sem ele, infere da branch/workspace
 iaw run --workflow bug_fix --issue-id 4512 --log          # mostra o log da IA
-iaw run --workflow bug_fix --issue-id 4512 --no-publish   # pula MR + PGD (alias --local)
+iaw run --workflow bug_fix --issue-id 4512 --no-publish   # pula MR + relatório (alias --local)
 iaw run --workflow bug_fix --issue-id 4512 --resume       # retoma do state.json
 ```
 
 **`iaw finish-task`** gera o `git diff`, pede um resumo executivo à IA, abre o
-**Merge Request** no GitLab e registra a atividade no relatório mensal do PGD.
+**Merge Request** no GitLab e registra a atividade no relatório mensal.
 
 Opções úteis do `finish-task`:
 
@@ -337,7 +337,7 @@ ecessárias”) e continua o fluxo normalmente.
 | `execute_ai_coding` | IA escreve código (autônoma ou com gate) |
 | `run_terminal_command` | Executa comando shell (ex.: `pytest`) |
 | `run_browser_harness` | Abre o navegador e tira screenshot (prova visual) |
-| `generate_summary_and_publish` | Resumo + MR + relatório PGD |
+| `generate_summary_and_publish` | Resumo + MR + relatório |
 
 ### 4.4 Criando um workflow próprio
 
@@ -368,7 +368,7 @@ iaw skill update --source <path|url>
 A fonte central pode ser configurada uma vez:
 
 ```bash
-iaw config set skill_repo https://github.com/ifrn/ia-skills.git
+iaw config set skill_repo https://github.com/sua-org/ia-skills.git
 ```
 
 **Como mapear a skill num workflow:** abra o YAML e informe o nome no step:
@@ -439,10 +439,10 @@ Usa `plyer` (nativa do SO); sem ele, cai para mensagem no terminal.
 
 ---
 
-## 7. Registro no PGD
+## 7. Registro no relatório
 
 O relatório fica **fora do repositório**, no diretório configurado em
-`pgd_report_path` (padrão `~/.config/ia_workflow/reports/`), um arquivo por mês
+`relatorio_path` (padrão `~/.config/ia_workflow/reports/`), um arquivo por mês
 (`agosto_2026.md`).
 
 Cada `iaw finish-task` adiciona:
@@ -450,10 +450,10 @@ Cada `iaw finish-task` adiciona:
 ```markdown
 - **[28/08/2026] Issue #4512:**
   - *Resumo IA:* Correção de lentidão na listagem de diários (N+1 → select_related).
-  - *Evidência:* [Merge Request](https://gitlab.ifrn.edu.br/cosinf/suap/-/merge_requests/892)
+  - *Evidência:* [Merge Request](https://gitlab.com/cosinf/suap/-/merge_requests/892)
 ```
 
-No fim do mês, o arquivo está pronto para a prestação de contas do PGD, já
+No fim do mês, o arquivo está pronto para a prestação de contas do relatório, já
 vinculado às Issues/MRs rastreáveis.
 
 ---
@@ -518,7 +518,7 @@ Veja a análise completa em [MIGRACAO_SUAP.md](MIGRACAO_SUAP.md).
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md |
 | `iaw start-task <id>` | Inicia tarefa a partir de Issue do GitLab |
 | `iaw run [--workflow <nome>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar) |
-| `iaw finish-task [--no-mr]` | Resumo + MR + relatório PGD |
+| `iaw finish-task [--no-mr]` | Resumo + MR + relatório |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Importa legado para `.iaw/` |

@@ -5,7 +5,7 @@
 O `ia_workflow` (comando **`iaw`**) padroniza o uso de IA em equipe, independente
 da ferramenta de cada desenvolvedor (Pi Coding, Aider, Claude, etc.), combinando
 **Artifact-Driven Development** + **Graph Engineering** e integrando **GitLab** e o
-**relatório mensal do PGD**.
+**relatório mensal de atividades**.
 
 ## Por quê?
 
@@ -16,7 +16,7 @@ da ferramenta de cada desenvolvedor (Pi Coding, Aider, Claude, etc.), combinando
 - ✅ **Context as Code**: as regras vivem em `.iaw/`, versionadas no projeto.
 - ✅ **Artifact-Driven**: a IA valida artefatos antes de gerar código.
 - ✅ **Graph Engineering**: workflows YAML orquestram as etapas com gates.
-- ✅ **Task-First**: tudo começa em uma Issue do GitLab e termina no PGD.
+- ✅ **Task-First**: tudo começa em uma Issue do GitLab e termina no relatório.
 
 ## Instalação
 
@@ -31,14 +31,14 @@ pip install -e '.[browser]'   # + Playwright (prova visual)
 ## Uso rápido
 
 ```bash
-iaw setup                      # configura token GitLab, engine, nome, caminho PGD
+iaw setup                      # configura token GitLab, engine, nome, caminho do relatório
 iaw init                       # cria a pasta .iaw/ no projeto atual
 
 iaw start-task 4512            # baixa a Issue do GitLab e gera o artefato
 iaw run --workflow bug_fix --issue-id 4512   # orquestra a IA (indicando a tarefa)
 iaw run --workflow bug_fix --issue-id 4512 --log   # idem, com log de execução da IA
-iaw run --workflow bug_fix --issue-id 4512 --no-publish   # idem, sem MR/PGD
-iaw finish-task                # resumo + MR + relatório PGD
+iaw run --workflow bug_fix --issue-id 4512 --no-publish   # idem, sem MR/relatório
+iaw finish-task                # resumo + MR + relatório
 ```
 
 ## Motores de IA suportados
@@ -100,8 +100,8 @@ steps:
 | `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md (IA) |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
-| `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar MR/PGD) |
-| `iaw finish-task` | Abre MR e atualiza o relatório PGD |
+| `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--no-publish]` | Orquestra o workflow (tarefa, log e/ou sem publicar MR/relatório) |
+| `iaw finish-task` | Abre MR e atualiza o relatório |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Centraliza skills/agents do legado em `.iaw/` |
@@ -113,7 +113,7 @@ steps:
 
 | Documento | Conteúdo |
 |-----------|----------|
-| [Guia do Desenvolvedor](docs/GUIA_DESENVOLVEDOR.md) | ⭐ Uso completo: conceitos, config, workflows, PGD, monitoramento |
+| [Guia do Desenvolvedor](docs/GUIA_DESENVOLVEDOR.md) | ⭐ Uso completo: conceitos, config, workflows, relatório, monitoramento |
 | [Exemplos de Fluxos Dev](docs/exemplos_fluxos_dev.md) | Passo a passo no SUAP (bug e nova funcionalidade) + como chamar o `iaw` |
 | [Plano de Implementação](docs/PLANO.md) | Fases, decisões e arquitetura |
 | [Migração do SUAP](docs/MIGRACAO_SUAP.md) | Análise das pastas legadas → `.iaw/` |
@@ -131,8 +131,8 @@ ia_workflow/                 # repositório da ferramenta
 │   ├── evals.py             # Golden Dataset + LLM-as-a-Judge
 │   ├── skills.py            # gerenciador de skills
 │   ├── gitlab_client.py     # integração GitLab
-│   ├── publish.py           # finish-task (MR + PGD)
-│   ├── reports.py           # relatório mensal PGD
+│   ├── publish.py           # finish-task (MR + relatório)
+│   ├── reports.py           # relatório mensal
 │   └── engines/             # Pi Coding (RPC), Aider e Antigravity (subprocess/CLI)
 └── docs/                    # documentação
 

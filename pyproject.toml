@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ia_workflow"
 version = "0.1.0"
-description = "CLI de orquestração Artifact-Driven para desenvolvimento assistido por IA (IFRN)."
+description = "CLI de orquestração Artifact-Driven para desenvolvimento assistido por IA."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Inácio" }]
-keywords = ["ai", "cli", "orchestration", "artifact-driven", "graph-engineering", "ifrn"]
+keywords = ["ai", "cli", "orchestration", "artifact-driven", "graph-engineering", "relatorio"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
