@@ -599,6 +599,12 @@ def _finish_recording(session: dict) -> None:
         console.print(activity, markup=False)
     else:
         console.print("\n[dim]Nenhuma atividade registrada durante a gravação.[/dim]")
+        err_log = Path(session.get("session_dir", "")) / "recorder.err.log"
+        if err_log.exists() and err_log.stat().st_size > 0:
+            console.print(
+                f"[yellow]Dica:[/yellow] o gravador registrou um erro em "
+                f"[cyan]{err_log}[/cyan] — veja o conteúdo para diagnosticar."
+            )
 
     sugerido = ""
     try:

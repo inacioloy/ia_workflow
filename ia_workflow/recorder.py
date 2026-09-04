@@ -24,18 +24,81 @@ SESSION_FILE = workspace.WORKSPACE_ROOT / "recording_session.json"
 DEFAULT_INTERVAL = 5.0
 
 
+def _windows_foreground() -> tuple[str, str]:
+    """Retorna ``(título, processo)`` da janela ativa no Windows.
+
+    Declara ``restype``/``argtypes`` explícitos porque o padrão do ctypes é
+    ``c_int`` (32 bits) — em Windows 64 bits isso **trunca o HWND** e faz a
+    leitura do título falhar silenciosamente. Também faz fallback para o nome
+    do executável (útil para apps que não expõem título na janela).
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    user32.GetForegroundWindow.restype = wintypes.HWND
+
+    user32.GetWindowTextLengthW.argtypes = [wintypes.HWND]
+    user32.GetWindowTextLengthW.restype = ctypes.c_int
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowTextW.restype = ctypes.c_int
+
+    user32.GetWindowThreadProcessId.argtypes = [
+        wintypes.HWND,
+        ctypes.POINTER(wintypes.DWORD),
+    ]
+    user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+
+    hwnd = user32.GetForegroundWindow()
+    if not hwnd:
+        return "", ""
+
+    title = ""
+    length = user32.GetWindowTextLengthW(hwnd)
+    if length > 0:
+        buf = ctypes.create_unicode_buffer(length + 1)
+        user32.GetWindowTextW(hwnd, buf, length + 1)
+        title = buf.value.strip()
+
+    proc = ""
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    if pid.value:
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.QueryFullProcessImageNameW.argtypes = [
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.LPWSTR,
+            ctypes.POINTER(wintypes.DWORD),
+        ]
+        kernel32.QueryFullProcessImageNameW.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
+        if handle:
+            try:
+                buf = ctypes.create_unicode_buffer(512)
+                size = wintypes.DWORD(512)
+                if kernel32.QueryFullProcessImageNameW(handle, 0, buf, ctypes.byref(size)):
+                    proc = Path(buf.value).name
+            finally:
+                kernel32.CloseHandle(handle)
+
+    return title, proc
+
+
 def get_active_window_title() -> str:
-    """Retorna o título da janela ativa (Windows via ctypes; Linux via xdotool)."""
+    """Retorna um rótulo da janela ativa (Windows via ctypes; Linux via xdotool)."""
     if sys.platform == "win32":
         try:
-            import ctypes
-
-            user32 = ctypes.windll.user32
-            hwnd = user32.GetForegroundWindow()
-            length = user32.GetWindowTextLengthW(hwnd)
-            buf = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(hwnd, buf, length + 1)
-            return buf.value.strip()
+            title, proc = _windows_foreground()
+            # Prefere o título; quando a janela não expõe título, usa o processo.
+            return title or proc
         except Exception:  # noqa: BLE001
             return ""
     if sys.platform.startswith("linux"):
@@ -87,9 +150,12 @@ def start_recording(
 
     session_dir = workspace.WORKSPACE_ROOT / "recording" / str(iid)
     session_dir.mkdir(parents=True, exist_ok=True)
+    # Caminho absoluto: o subprocesso grava em background e não depende do cwd.
+    session_dir = session_dir.resolve()
 
     # Limpa resíduos de uma gravação anterior do mesmo work item.
     (session_dir / "activity.log").unlink(missing_ok=True)
+    (session_dir / "recorder.err.log").unlink(missing_ok=True)
     (session_dir / "stop").unlink(missing_ok=True)
     (session_dir / "done").unlink(missing_ok=True)
 
@@ -106,9 +172,12 @@ def start_recording(
         json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
+    # stderr vai para um arquivo (não DEVNULL) para permitir diagnóstico se o
+    # subprocesso falhar ao iniciar.
+    err_file = (session_dir / "recorder.err.log").open("wb")
     kwargs: dict[str, Any] = {
         "stdout": subprocess.DEVNULL,
-        "stderr": subprocess.DEVNULL,
+        "stderr": err_file,
     }
     if sys.platform == "win32":
         # No Windows não se pode combinar ``close_fds=True`` com redirecionamento
@@ -122,10 +191,13 @@ def start_recording(
         kwargs["close_fds"] = True
         kwargs["start_new_session"] = True
 
-    subprocess.Popen(
-        [sys.executable, "-m", "ia_workflow.recorder", str(session_dir), str(interval)],
-        **kwargs,
-    )
+    try:
+        subprocess.Popen(
+            [sys.executable, "-m", "ia_workflow.recorder", str(session_dir), str(interval)],
+            **kwargs,
+        )
+    finally:
+        err_file.close()
     return session
 
 
@@ -159,6 +231,13 @@ def record_loop(session_dir: Path, interval: float) -> None:
     last_title: str | None = None
 
     try:
+        # Marca o início da gravação: confirma que o processo subiu mesmo que
+        # nenhuma mudança de janela seja detectada depois.
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(
+                f"# gravação iniciada em {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            )
+
         while True:
             title = get_active_window_title()
             if title and title != last_title:
