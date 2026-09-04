@@ -58,6 +58,10 @@ class GitLabClient:
     def current_user(self) -> Any:
         """Retorna o usuário autenticado (para usar como assignee)."""
         try:
+            # python-gitlab >= 8 só popula ``gl.user`` após ``gl.auth()``.
+            self.gl.auth()
+            if self.gl.user is None:
+                raise GitLabError("Usuário autenticado não retornado pelo GitLab.")
             return self.gl.user
         except GitLabError:
             raise
