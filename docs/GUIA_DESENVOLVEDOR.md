@@ -261,6 +261,10 @@ iaw create --task --title "Enviar RIT" --recording  # grava janelas + screenshot
 iaw finish-task  # fecha a task com resumo gerado por visão (Gemini/agy)
 ```
 
+> **WSL**: se o `iaw` rodar dentro do WSL, a gravação captura a tela do
+> **Windows** (desktop real) via interop `powershell.exe` — não o display do
+> WSL, que ficaria preto.
+
 ---
 
 ## 4. Workflows

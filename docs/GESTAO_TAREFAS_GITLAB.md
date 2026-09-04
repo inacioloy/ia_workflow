@@ -107,10 +107,21 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 Com `--recording`, o `iaw` cria o work item **e já inicia um processo em segundo
 plano** que registra:
 
-- o **título da janela ativa** (com timestamp) num log local — Windows via API
-  nativa, Linux via `xdotool` (quando instalado);
-- **screenshots periódicos** da tela inteira (todos os monitores) com `mss`,
-  salvos em `.iaw_workspace/recording/<id>/shots/` (redimensionados para JPEG).
+- o **título da janela ativa** (com timestamp) num log local;
+- **screenshots periódicos** da tela inteira (todos os monitores), salvos em
+  `.iaw_workspace/recording/<id>/shots/` (redimensionados para JPEG).
+
+A captura se adapta ao ambiente:
+
+| Ambiente | Título da janela | Screenshot |
+|----------|------------------|------------|
+| Windows nativo | API nativa (`ctypes`) | `mss` |
+| **WSL** | `powershell.exe` (tela do Windows) | `powershell.exe` (tela do Windows) |
+| Linux | `xdotool` | `mss` |
+
+> ⚠️ **No WSL**, o `iaw` roda no Linux, mas captura a tela do **Windows** (seu
+> desktop real, com e-mail/WhatsApp/etc.) via interop `powershell.exe`. É o
+> comportamento esperado: sem isso, o display do WSL ficaria preto.
 
 ```bash
 # 1. Cria a task e começa a gravar (janelas + screenshots)

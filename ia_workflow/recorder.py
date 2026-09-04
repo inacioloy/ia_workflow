@@ -3,7 +3,14 @@
 Enquanto o usuário trabalha, um processo em segundo plano registra:
 
 - o **título da janela ativa** (com timestamp) num arquivo de log;
-- **screenshots periódicos** da tela (todos os monitores) com ``mss``.
+- **screenshots periódicos** da tela (todos os monitores).
+
+A captura é adaptada ao ambiente:
+
+- **Windows nativo**: ``ctypes`` (título) e ``mss`` (screenshot);
+- **WSL**: ``powershell.exe`` via interop captura a tela/janela do **Windows**
+  (é o desktop real do usuário, não o display vazio do WSL);
+- **Linux**: ``xdotool`` (título) e ``mss`` (screenshot).
 
 No ``iaw finish-task``, a gravação é encerrada e o histórico (screenshots +
 títulos) é usado para sugerir o resumo.
@@ -12,6 +19,7 @@ títulos) é usado para sugerir o resumo.
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 import time
@@ -25,6 +33,74 @@ SESSION_FILE = workspace.WORKSPACE_ROOT / "recording_session.json"
 DEFAULT_INTERVAL = 5.0
 DEFAULT_SHOT_INTERVAL = 20.0
 MAX_SHOTS_FOR_SUMMARY = 24
+
+_IS_WSL: bool | None = None
+
+
+def _is_wsl() -> bool:
+    """Detecta execução dentro do WSL (Windows Subsystem for Linux)."""
+    global _IS_WSL
+    if _IS_WSL is None:
+        try:
+            _IS_WSL = (
+                "microsoft" in Path("/proc/version").read_text(encoding="utf-8").lower()
+            )
+        except OSError:
+            _IS_WSL = False
+    return _IS_WSL
+
+
+def _powershell(script: str, timeout: int = 30) -> str:
+    """Executa um script no Windows via interop do WSL e retorna o stdout."""
+    try:
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return ""
+    return (result.stdout or "").strip() if result.returncode == 0 else ""
+
+
+def _windows_path_to_wsl(win_path: str) -> Path | None:
+    """Converte ``C:\\Users\\...`` em ``/mnt/c/Users/...``."""
+    p = win_path.strip().replace("\\", "/")
+    m = re.match(r"^([A-Za-z]):(.*)$", p)
+    if not m:
+        return None
+    return Path(f"/mnt/{m.group(1).lower()}{m.group(2)}")
+
+
+def _wsl_window_title() -> str:
+    """Título da janela ativa do **Windows** (via PowerShell no WSL)."""
+    script = (
+        'Add-Type @"\n'
+        'using System;\n'
+        'using System.Runtime.InteropServices;\n'
+        'using System.Text;\n'
+        'public class IawWin32 {\n'
+        '  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();\n'
+        '  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);\n'
+        '  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);\n'
+        '  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);\n'
+        '}\n'
+        '"@\n'
+        '$h = [IawWin32]::GetForegroundWindow()\n'
+        'if ($h -eq [IntPtr]::Zero) { exit 0 }\n'
+        '$len = [IawWin32]::GetWindowTextLength($h)\n'
+        '$sb = New-Object System.Text.StringBuilder ([Math]::Max($len + 1, 1))\n'
+        '[IawWin32]::GetWindowText($h, $sb, $sb.Capacity) | Out-Null\n'
+        '$title = $sb.ToString()\n'
+        'if ([string]::IsNullOrWhiteSpace($title)) {\n'
+        '  $wpid = 0\n'
+        '  [IawWin32]::GetWindowThreadProcessId($h, [ref]$wpid) | Out-Null\n'
+        '  if ($wpid -ne 0) { try { $title = (Get-Process -Id $wpid -ErrorAction Stop).ProcessName } catch { $title = "" } }\n'
+        '}\n'
+        'Write-Output $title\n'
+    )
+    return _powershell(script, timeout=8)
 
 
 def _windows_foreground() -> tuple[str, str]:
@@ -96,7 +172,7 @@ def _windows_foreground() -> tuple[str, str]:
 
 
 def get_active_window_title() -> str:
-    """Retorna um rótulo da janela ativa (Windows via ctypes; Linux via xdotool)."""
+    """Retorna um rótulo da janela ativa (Windows nativo, WSL ou Linux)."""
     if sys.platform == "win32":
         try:
             title, proc = _windows_foreground()
@@ -105,6 +181,8 @@ def get_active_window_title() -> str:
         except Exception:  # noqa: BLE001
             return ""
     if sys.platform.startswith("linux"):
+        if _is_wsl():
+            return _wsl_window_title()
         try:
             result = subprocess.run(
                 ["xdotool", "getactivewindow", "getwindowname"],
@@ -119,17 +197,63 @@ def get_active_window_title() -> str:
     return ""
 
 
+def _wsl_capture(shots_dir: Path, name: str) -> str | None:
+    """Captura a tela do **Windows** (todos os monitores) via PowerShell no WSL."""
+    script = (
+        'Add-Type -AssemblyName System.Drawing\n'
+        'Add-Type -AssemblyName System.Windows.Forms\n'
+        '$b = [System.Windows.Forms.SystemInformation]::VirtualScreen\n'
+        'if ($b.Width -le 0 -or $b.Height -le 0) { exit 1 }\n'
+        '$bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height\n'
+        '$g = [System.Drawing.Graphics]::FromImage($bmp)\n'
+        '$g.CopyFromScreen($b.X, $b.Y, 0, 0, $bmp.Size)\n'
+        '$out = Join-Path $env:TEMP ("iaw_shot_" + [DateTime]::Now.ToString("yyyyMMddHHmmssfff") + ".png")\n'
+        '$bmp.Save($out, [System.Drawing.Imaging.ImageFormat]::Png)\n'
+        '$g.Dispose(); $bmp.Dispose()\n'
+        'Write-Output $out\n'
+    )
+    win_out = _powershell(script, timeout=40)
+    if not win_out:
+        return None
+    win_path = win_out.splitlines()[-1]
+    wsl_path = _windows_path_to_wsl(win_path)
+    if wsl_path is None or not wsl_path.exists():
+        return None
+    try:
+        data = wsl_path.read_bytes()
+        wsl_path.unlink(missing_ok=True)
+    except OSError:
+        return None
+    if not data:
+        return None
+    try:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data)).convert("RGB")
+        img.thumbnail((1600, 1600))  # preserva a proporção
+        out = shots_dir / name.replace(".png", ".jpg")
+        img.save(out, "JPEG", quality=70)
+        return str(out)
+    except Exception:  # noqa: BLE001 — sem Pillow, salva o PNG original
+        out = shots_dir / name
+        out.write_bytes(data)
+        return str(out)
+
+
 def capture_screenshot(shots_dir: Path, name: str) -> str | None:
     """Captura a tela inteira (todos os monitores) e salva em ``shots_dir``.
 
-    Usa ``mss`` (monitor 0 → tela virtual que cobre todos os monitores). Com
-    Pillow disponível, diminui a imagem e salva JPEG (bem menor para o resumo
-    por visão); sem Pillow, salva PNG em resolução cheia via ``mss``.
+    No WSL, captura a tela do **Windows** via PowerShell (interop). Fora do
+    WSL, usa ``mss`` (monitor 0 → tela virtual). Com Pillow disponível, diminui
+    e salva JPEG; sem Pillow, salva PNG.
 
-    Retorna o caminho do arquivo salvo, ou ``None`` se o ``mss`` não estiver
-    instalado ou a captura falhar (o gravador continua funcionando só com
-    os títulos de janela).
+    Retorna o caminho do arquivo salvo, ou ``None`` se a captura falhar (o
+    gravador continua funcionando só com os títulos de janela).
     """
+    if _is_wsl():
+        return _wsl_capture(shots_dir, name)
     try:
         import mss
     except ImportError:
