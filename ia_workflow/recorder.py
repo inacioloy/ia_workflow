@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -27,12 +28,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from . import workspace
+from . import config_manager as cfg
 
-SESSION_FILE = workspace.WORKSPACE_ROOT / "recording_session.json"
+# Os artefatos da gravação ficam fora do repositório (na config global), para
+# não sujar a pasta do projeto.
+RECORDING_ROOT = cfg.CONFIG_DIR / "recording"
+SESSION_FILE = RECORDING_ROOT / "recording_session.json"
 DEFAULT_INTERVAL = 5.0
-DEFAULT_SHOT_INTERVAL = 20.0
-MAX_SHOTS_FOR_SUMMARY = 24
+DEFAULT_SHOT_INTERVAL = 30.0
+MAX_SHOTS_FOR_SUMMARY = 12
 
 _IS_WSL: bool | None = None
 
@@ -330,8 +334,15 @@ def load_session() -> dict[str, Any] | None:
     return None
 
 
-def clear_session() -> None:
-    """Remove o arquivo de sessão de gravação."""
+def clear_session(session: dict[str, Any] | None = None) -> None:
+    """Remove a sessão de gravação e seus artefatos (screenshots/logs)."""
+    if session:
+        session_dir = Path(session.get("session_dir", ""))
+        try:
+            if session_dir.is_relative_to(RECORDING_ROOT):
+                shutil.rmtree(session_dir, ignore_errors=True)
+        except (OSError, ValueError):
+            pass
     if SESSION_FILE.exists():
         SESSION_FILE.unlink()
 
@@ -350,10 +361,9 @@ def start_recording(
             "Já existe uma gravação ativa. Encerre com `iaw finish-task` antes de iniciar outra."
         )
 
-    session_dir = workspace.WORKSPACE_ROOT / "recording" / str(iid)
+    RECORDING_ROOT.mkdir(parents=True, exist_ok=True)
+    session_dir = (RECORDING_ROOT / str(iid)).resolve()
     session_dir.mkdir(parents=True, exist_ok=True)
-    # Caminho absoluto: o subprocesso grava em background e não depende do cwd.
-    session_dir = session_dir.resolve()
 
     shots_dir = session_dir / "shots"
     shots_dir.mkdir(parents=True, exist_ok=True)
@@ -377,7 +387,6 @@ def start_recording(
         "interval": interval,
         "shot_interval": shot_interval,
     }
-    workspace.WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
     SESSION_FILE.write_text(
         json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8"
     )

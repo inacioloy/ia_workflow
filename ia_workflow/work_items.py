@@ -19,6 +19,7 @@ dentro daquele mês.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from . import config_manager as cfg
@@ -199,6 +200,7 @@ def finish_work_item(
     iid: int,
     title: str | None = None,
     description: str | None = None,
+    attachments: list[str] | None = None,
     close: bool = True,
 ) -> Any:
     """Atualiza/fecha um work item preservando os labels existentes.
@@ -206,6 +208,9 @@ def finish_work_item(
     Garante o label do mês atual e, se ``close=True``, fecha o item (o GitLab
     preenche a data de fechamento). O assignee já é o usuário do token desde a
     criação, então não precisa ser alterado.
+
+    ``attachments`` são arquivos (ex.: screenshots) enviados como anexos ao
+    projeto e embutidos como markdown na descrição.
     """
     client = GitLabClient()
     item = client.get_issue(project_id, iid)
@@ -214,11 +219,28 @@ def finish_work_item(
     if month not in labels:
         labels.append(month)
 
+    desc = description or ""
+    if attachments:
+        uploaded: list[str] = []
+        for path in attachments:
+            p = Path(path)
+            if not p.is_file():
+                continue
+            try:
+                upload = client.upload_file(project_id, p.name, str(p))
+            except GitLabError:
+                continue
+            md = upload.get("markdown") or f"![{p.name}]({upload.get('url', '')})"
+            if md:
+                uploaded.append(md)
+        if uploaded:
+            desc = (desc + "\n\n## Anexos\n" + "\n".join(uploaded)).strip()
+
     updates: dict[str, Any] = {"labels": ",".join(labels)}
     if title is not None:
         updates["title"] = title
-    if description is not None:
-        updates["description"] = description
+    if desc:
+        updates["description"] = desc
     if close:
         updates["state_event"] = "close"
     return client.update_issue(project_id, iid, **updates)

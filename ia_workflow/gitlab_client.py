@@ -134,6 +134,20 @@ class GitLabClient:
         except Exception as exc:  # noqa: BLE001
             raise GitLabError(f"Não foi possível listar as Issues: {exc}") from exc
 
+    def upload_file(self, project_id: str, filename: str, filepath: str) -> dict[str, Any]:
+        """Faz upload de um arquivo no projeto (anexo) e retorna o dict do GitLab.
+
+        O dict contém ``url`` e ``markdown`` (ex.: ``![name](/uploads/...)``),
+        usados para anexar a imagem à descrição da issue/task.
+        """
+        try:
+            project = self.get_project(project_id)
+            return project.upload(filename, filepath=filepath)
+        except GitLabError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GitLabError(f"Não foi possível enviar o anexo '{filename}': {exc}") from exc
+
     def create_merge_request(self, project_id: str, **kwargs: Any) -> Any:
         """Cria um Merge Request (Fase 4 — ainda não usado pelo finish-task)."""
         try:

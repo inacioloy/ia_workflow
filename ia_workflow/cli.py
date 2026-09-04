@@ -7,6 +7,7 @@ comando de ajuda detalhada (`iaw help [comando]`).
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import typer
@@ -380,6 +381,11 @@ def create_work_item_cmd(
         "--record",
         help="Grava janelas ativas e screenshots da tela (encerre com `iaw finish-task`).",
     ),
+    shot_interval: float = typer.Option(
+        None,
+        "--shot-interval",
+        help="Intervalo em segundos entre screenshots (padrão: config recording_shot_interval).",
+    ),
 ) -> None:
     """Cria uma Task (--task) ou Issue (--issue) atribuída ao seu usuário."""
     if task and issue:
@@ -417,11 +423,17 @@ def create_work_item_cmd(
 
     if recording:
         pid = project_id or cfg.get("gitlab_project") or ""
+        interval = (
+            float(shot_interval)
+            if shot_interval is not None
+            else float(cfg.get("recording_shot_interval", 30) or 30)
+        )
         try:
             recorder.start_recording(
                 iid=getattr(item, "iid"),
                 project_id=pid,
                 title=title.strip(),
+                shot_interval=interval,
             )
         except RuntimeError as exc:
             console.print(f"[yellow]Aviso:[/yellow] {exc}")
@@ -589,45 +601,59 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
+def _clean_summary(text: str) -> str:
+    """Limpa o resumo: remove prefixos markdown e limita o tamanho."""
+    text = (text or "").strip()
+    text = re.sub(
+        r"^(\*\*)?(resumo|summary)(\*\*)?\s*[:：]\s*",
+        "",
+        text,
+        flags=re.IGNORECASE,
+    ).strip()
+    if len(text) > 400:
+        text = text[:400].rsplit(" ", 1)[0].rstrip(" ,;:.") + "…"
+    return text
+
+
 def _suggest_summary(activity: str, shots: list[str]) -> str:
-    """Sugere um resumo: por visão (agy/Gemini) se houver screenshots, senão texto."""
+    """Sugere um resumo curto e impessoal (visão via agy/Gemini, ou texto)."""
     if shots:
         try:
             engine = get_engine(
                 "antigravity",
+                model=cfg.get("recording_summary_model") or None,
                 skip_permissions=cfg.get("antigravity_skip_permissions", True),
             )
             paths = "\n".join(f"- {p}" for p in shots)
             prompt = (
-                "Você é um assistente que resume o trabalho de um usuário a partir "
-                "de screenshots da tela. Abra cada arquivo de imagem abaixo com a "
-                "ferramenta view_file (uma por vez) e entenda o que estava sendo "
-                "feito. Em seguida, escreva um resumo de até 3 frases, em pt-BR, do "
-                "trabalho realizado, mencionando as atividades principais (ex.: "
-                "respondendo e-mails, conversando no WhatsApp, editando código em "
-                "determinado arquivo etc.).\n\n"
+                "Abra cada screenshot abaixo com a ferramenta view_file e escreva um "
+                "resumo IMPESSOAL e CURTO, em pt-BR, no máximo 3 frases curtas, no "
+                "estilo: 'Foi feito X. Foi implementado Y. Foi encaminhado Z.' "
+                "Não use primeira pessoa ('eu', 'você'), não descreva as imagens, "
+                "não repita títulos de janela. Seja direto e objetivo.\n\n"
                 "Screenshots em ordem cronológica:\n"
                 f"{paths}\n\n"
-                "Histórico de janelas ativas (contexto auxiliar):\n"
+                "Janelas ativas (contexto auxiliar):\n"
                 f"{activity or '(sem registro)'}"
             )
             console.print("[dim]Gerando resumo a partir dos screenshots (agy/Gemini)...[/dim]")
             result = engine.generate(prompt)
             if result.success and result.output.strip():
-                return result.output.strip()
+                return _clean_summary(result.output)
         except Exception:  # noqa: BLE001 — falha na visão não deve travar o encerramento
             pass
 
     try:
         engine = build_engine()
         prompt = (
-            "Resuma em até 3 frases, em pt-BR, o que foi feito com base no "
-            "histórico de janelas ativas abaixo. Seja objetivo.\n\n"
+            "Resuma em até 3 frases curtas, em pt-BR, de forma IMPESSOAL, o que "
+            "foi feito com base no histórico de janelas ativas abaixo. Estilo: "
+            "'Foi feito X. Foi implementado Y. Foi encaminhado Z.'\n\n"
             + (activity or "(sem registro de atividades)")
         )
         result = engine.generate(prompt)
         if result.success and result.output.strip():
-            return result.output.strip()
+            return _clean_summary(result.output)
     except Exception:  # noqa: BLE001 — motor indisponível não deve travar o encerramento
         pass
     return ""
@@ -657,31 +683,43 @@ def _finish_recording(session: dict) -> None:
 
     sugerido = _suggest_summary(activity, shots)
 
-    resumo = Prompt.ask("Resumo do que foi feito", default=sugerido or "").strip()
+    # 1) Confirma o resumo (y = usa direto; n = digita manual ou deixa vazio).
+    if sugerido:
+        console.print(f"\n[bold]Resumo sugerido:[/bold]\n{sugerido}")
+        if Confirm.ask("Aceita o resumo?", default=True):
+            resumo = sugerido
+        else:
+            resumo = Prompt.ask("Resumo (ou Enter para deixar vazio)", default="").strip()
+    else:
+        resumo = Prompt.ask("Resumo do que foi feito (ou Enter para deixar vazio)", default="").strip()
 
-    update_title = Confirm.ask("Deseja atualizar o título da task?", default=False)
-    new_title = None
-    if update_title:
-        new_title = Prompt.ask("Título", default=session.get("title", "")).strip()
+    # 2) Anexos (até 5 screenshots).
+    attachments: list[str] = []
+    if shots:
+        if Confirm.ask("Deseja anexar prints à task? (até 5)", default=False):
+            attachments = recorder.list_screenshots(session, max_shots=5)
 
     try:
         item = work_items.finish_work_item(
             project_id=session["project_id"],
             iid=session["iid"],
-            title=new_title or None,
             description=resumo or None,
+            attachments=attachments or None,
             close=True,
         )
     except GitLabError as exc:
         console.print(f"[red]Erro:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
-    recorder.clear_session()
+    # 3) Remove os artefatos da gravação (screenshots/logs/sessão).
+    recorder.clear_session(session)
     console.print(
         f"\n[bold green]✓ Tarefa encerrada.[/bold green] "
         f"#{getattr(item, 'iid', session['iid'])} — [cyan]{getattr(item, 'web_url', '')}[/cyan]"
     )
     console.print(f"   Labels: {', '.join(getattr(item, 'labels', None) or [])}")
+    if attachments:
+        console.print(f"   Anexos: [dim]{len(attachments)} print(s)[/dim]")
 
 
 @app.command(

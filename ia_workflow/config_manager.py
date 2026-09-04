@@ -39,6 +39,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "relatorio_path": str(REPORTS_DIR),
     "auto_write_files": True,
     "notify_webhook": "",
+    # Gravação de atividades (iaw create --recording).
+    "recording_shot_interval": 30,  # segundos entre screenshots
+    "recording_summary_model": "gemini-3.8-flash-high",  # modelo rápido p/ resumo por visão
 }
 
 

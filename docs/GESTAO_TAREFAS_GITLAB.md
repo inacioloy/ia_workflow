@@ -108,8 +108,10 @@ Com `--recording`, o `iaw` cria o work item **e já inicia um processo em segund
 plano** que registra:
 
 - o **título da janela ativa** (com timestamp) num log local;
-- **screenshots periódicos** da tela inteira (todos os monitores), salvos em
-  `.iaw_workspace/recording/<id>/shots/` (redimensionados para JPEG).
+- **screenshots periódicos** da tela inteira (todos os monitores).
+
+Os artefatos ficam **fora do repositório**, em
+`~/.config/ia_workflow/recording/<id>/` (screenshots em `shots/`).
 
 A captura se adapta ao ambiente:
 
@@ -122,6 +124,16 @@ A captura se adapta ao ambiente:
 > ⚠️ **No WSL**, o `iaw` roda no Linux, mas captura a tela do **Windows** (seu
 > desktop real, com e-mail/WhatsApp/etc.) via interop `powershell.exe`. É o
 > comportamento esperado: sem isso, o display do WSL ficaria preto.
+
+O intervalo entre screenshots é configurável (padrão **30 s**):
+
+```bash
+# Config global (padrão para toda gravação)
+iaw config set recording_shot_interval 30
+
+# Ou sobrescreve só nesta criação
+iaw create --task --title "..." --recording --shot-interval 60
+```
 
 ```bash
 # 1. Cria a task e começa a gravar (janelas + screenshots)
@@ -136,19 +148,18 @@ iaw finish-task
 O `iaw finish-task` detecta a gravação ativa e, em sequência:
 
 1. **Para a gravação** e mostra o histórico de janelas registradas;
-2. **Sugere um resumo**: com screenshots capturados, o `iaw` envia as imagens
-   para o **Gemini via `agy`** (motor Antigravity), que **lê as telas** e resume
-   o que foi feito — você pode editar antes de confirmar. Sem screenshots, o
-   resumo é gerado a partir dos títulos das janelas pelo motor configurado;
-3. **Pergunta se quer atualizar o título** da task;
-4. **Atualiza e fecha o work item** no GitLab com: título (atualizado ou
-   original), descrição = resumo, **assignee = você** (já definido na criação),
-   **data de fechamento** (o GitLab preenche ao fechar) e **label do mês**
-   (garantido, preservando os labels existentes).
+2. **Sugere um resumo curto e impessoal** (estilo "Foi feito X. Foi implementado
+   Y. Foi encaminhado Z.") — com screenshots, o resumo é gerado por visão
+   (Gemini/`agy`, modelo rápido configurável em `recording_summary_model`);
+3. **Pergunta se aceita o resumo** (y = inclui direto; n = digita manual);
+4. **Pergunta se quer anexar prints** à task (até **5** screenshots);
+5. **Atualiza e fecha o work item** no GitLab com: descrição = resumo (+ anexos),
+   **assignee = você**, **data de fechamento** e **label do mês**;
+6. **Remove os artefatos** da gravação (screenshots/logs) após fechar a task.
 
 > O processo de gravação roda em background e é encerrado automaticamente pelo
-> `finish-task`. Se precisar cancelar sem fechar, basta apagar o arquivo
-> `.iaw_workspace/recording_session.json` e o processo para na próxima iteração.
+> `finish-task`. Se precisar cancelar sem fechar, apague a pasta
+> `~/.config/ia_workflow/recording/` e o processo para na próxima iteração.
 
 ---
 

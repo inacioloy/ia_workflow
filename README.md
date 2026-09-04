@@ -69,6 +69,16 @@ iaw config set context_max_file_chars 20000   # limite por arquivo
 Arquivos acima do limite são truncados/omitidos com aviso no prompt — evita
 estourar a janela do modelo quando o `.iaw/` e os artefatos crescem.
 
+**Gravação de atividades** (`iaw create --recording`):
+
+```bash
+iaw config set recording_shot_interval 30     # segundos entre screenshots (padrão 30)
+iaw config set recording_summary_model gemini-3.8-flash-high  # modelo rápido p/ resumo por visão
+```
+
+Os screenshots ficam em `~/.config/ia_workflow/recording/` e são apagados no
+`iaw finish-task`.
+
 ## Conceitos-chave
 
 | Conceito | O que é |
