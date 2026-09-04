@@ -108,16 +108,18 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 Lista os work items **fechados** do mês **do usuário do token** (você) e indica
 a categoria de cada um.
 
-O relatório aplica **três filtros combinados**:
+O mês é indicado pelo argumento (ex.: `AGO/2026`), mas a seleção é feita pela
+**data de fechamento** (`closed_at`) dentro daquele mês — **não** é exigido que
+o item tenha o label do mês.
 
-1. **Label do mês** (ex.: `SET/2026`) — filtrado na API do GitLab.
+Filtros aplicados:
+
+1. **Usuário** — só entram itens em que você é **autor** ou **assignee**.
 2. **Data de fechamento** (`closed_at`) — o item precisa ter sido **fechado dentro
-   daquele mês**.
-3. **Usuário** — só entram itens em que você é **autor** ou **assignee**
-   (o relatório mostra o seu papel: `autor`, `resolvido por` ou `autor e resolvido por`).
+   do mês** indicado (ex.: agosto/2026).
 
-Ou seja, só entra no relatório o item que tiver o label do mês, tiver sido
-fechado naquele mês **e** for seu (autor ou assignee).
+O relatório também mostra o seu papel: `autor`, `resolvido por` ou
+`autor e resolvido por`.
 
 ### 4.1 Sintaxe
 
@@ -127,7 +129,7 @@ iaw relatorio tasks [<label-do-mês>] [--project-id <path>]
 
 | Argumento/Opção | Descrição |
 |-----------------|-----------|
-| `<label-do-mês>` | Label do mês (ex.: `SET/2026`). Se omitido, usa o **mês atual**. |
+| `<mês>` | Mês do relatório (ex.: `AGO/2026`). Se omitido, usa o **mês atual**. |
 | `--project-id <path>` | Sobrescreve o projeto padrão. |
 
 ### 4.2 Exemplos

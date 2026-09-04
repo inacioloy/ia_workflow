@@ -74,10 +74,10 @@ COMMAND_HELP: dict[str, dict] = {
         "resumo": "Gera relatórios a partir dos work items do GitLab.",
         "detalhe": (
             "Subcomando `tasks`: lista os work items fechados do mês do usuário do "
-            "token (autor ou assignee) — filtrados pelo label do mês (ex.: SET/2026) "
-            "E pela data de fechamento dentro daquele mês — indicando a categoria "
-            "(task geral, demanda ou erro) e o papel do usuário ('autor' ou "
-            "'resolvido por'). Se o label do mês for omitido, usa o mês atual."
+            "token (autor ou assignee) — a seleção é feita pela data de fechamento "
+            "dentro do mês indicado (ex.: AGO/2026), independentemente do label — "
+            "indicando a categoria (task geral, demanda ou erro) e o papel do usuário "
+            "('autor' ou 'resolvido por'). Se o mês for omitido, usa o mês atual."
         ),
         "exemplos": [
             "iaw relatorio tasks SET/2026",

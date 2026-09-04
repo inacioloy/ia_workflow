@@ -101,13 +101,19 @@ class GitLabClient:
         *,
         state: str = "opened",
         labels: str | None = None,
+        author_id: int | None = None,
+        assignee_id: int | None = None,
     ) -> list[Any]:
-        """Lista Issues do GitLab (opcionalmente por estado e label)."""
+        """Lista Issues do GitLab (opcionalmente por estado, label, autor e assignee)."""
         try:
             project = self.get_project(project_id)
             kwargs: dict[str, Any] = {"state": state, "all": True}
             if labels:
                 kwargs["labels"] = labels
+            if author_id is not None:
+                kwargs["author_id"] = author_id
+            if assignee_id is not None:
+                kwargs["assignee_id"] = assignee_id
             return list(project.issues.list(**kwargs))
         except GitLabError:
             raise

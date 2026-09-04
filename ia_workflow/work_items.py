@@ -10,8 +10,10 @@ Convenções usadas pelo ``iaw create`` e pelo ``iaw relatorio tasks``:
 
 As categorias do relatório são inferidas dos labels e do ``issue_type``.
 
-O relatório mensal filtra por **label do mês** (ex.: ``SET/2026``) **e** pela
-**data de fechamento** (``closed_at``) dentro daquele mês.
+O relatório mensal seleciona os itens pela **data de fechamento** (``closed_at``)
+dentro do mês indicado pelo label (ex.: ``SET/2026``) — o item **não** precisa
+ter o label do mês para aparecer — e restringe aos itens em que o usuário do
+token é **autor** ou **assignee**.
 """
 
 from __future__ import annotations
@@ -184,17 +186,17 @@ def list_closed_work_items(
     label: str,
     project_id: str | None = None,
 ) -> dict[str, Any]:
-    """Lista os work items fechados do mês **do usuário do token**.
+    """Lista os work items fechados no mês **do usuário do token**.
+
+    O mês é indicado pelo ``label`` (ex.: ``AGO/2026``), mas a seleção é feita
+    pela **data de fechamento** (``closed_at``) dentro daquele mês — o item
+    **não** precisa ter o label do mês para aparecer.
 
     Retorna um dicionário com:
 
     - ``items``: lista de ``(item, categoria, papel)`` — apenas itens em que o
       usuário do token é **autor** ou **assignee**;
     - ``username``: login do usuário do token (para exibição).
-
-    O mês é definido pelo **label** (ex.: ``SET/2026``) e confirmado pela
-    **data de fechamento** (``closed_at``) do item — ou seja, o item precisa
-    ter o label do mês **e** ter sido fechado dentro daquele mês.
     """
     config = cfg.load_config()
     pid = project_id or config.get("gitlab_project") or ""
@@ -217,10 +219,15 @@ def list_closed_work_items(
     user_id = user.id
     username = getattr(user, "username", "") or "você"
 
-    items = client.list_issues(pid, state="closed", labels=label)
+    # Busca apenas os itens do usuário (autor OU assignee) e faz o merge por iid.
+    authored = client.list_issues(pid, state="closed", author_id=user_id)
+    assigned = client.list_issues(pid, state="closed", assignee_id=user_id)
+    by_iid: dict[Any, Any] = {}
+    for item in authored + assigned:
+        by_iid[getattr(item, "iid", None)] = item
 
     resultado: list[tuple[Any, str, str]] = []
-    for item in items:
+    for item in by_iid.values():
         closed = _closed_at(item)
         if closed is None or not (start <= closed < end):
             continue
@@ -229,4 +236,6 @@ def list_closed_work_items(
             continue
         resultado.append((item, classify_work_item(item), papel))
 
+    # Mais recentes primeiro, para facilitar a leitura.
+    resultado.sort(key=lambda t: getattr(t[0], "iid", 0), reverse=True)
     return {"items": resultado, "username": username}
