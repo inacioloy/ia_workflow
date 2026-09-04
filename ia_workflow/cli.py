@@ -438,6 +438,7 @@ def relatorio_tasks(
     table.add_column("Tipo")
     table.add_column("Papel")
     table.add_column("Título", overflow="fold")
+    table.add_column("Link", overflow="fold")
 
     icons = {
         work_items.CATEGORIA_ERRO: "🐞",
@@ -453,6 +454,7 @@ def relatorio_tasks(
             work_items.item_type_label(item),
             papel,
             getattr(item, "title", "") or "",
+            getattr(item, "web_url", "") or "",
         )
 
     console.print(table)

@@ -149,13 +149,13 @@ iaw relatorio tasks SET/2026 --project-id cosinf/suap
 
 ```
   Relatório de tasks/issues fechadas (SET/2026) — inacio
-┏━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃     # ┃ Categoria    ┃ Tipo  ┃ Papel               ┃ Título                              ┃
-┡━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│  1234 │ ✅ task geral │ Task  │ autor               │ Corrigir N+1 na listagem de diários │
-│  1235 │ 📦 demanda    │ Task  │ resolvido por       │ Nova tela de relatórios gerenciais  │
-│  1236 │ 🐞 erro       │ Issue │ autor e resolvido por│ Erro 500 ao salvar boletim          │
-└───────┴──────────────┴───────┴─────────────────────┴────────────────────────────────────┘
+┏━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
+┃     # ┃ Categoria    ┃ Tipo  ┃ Papel               ┃ Título                  ┃ Link            ┃
+┡━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
+│  1234 │ ✅ task geral │ Task  │ autor               │ Corrigir N+1 nos diários│ https://.../1234│
+│  1235 │ 📦 demanda    │ Task  │ resolvido por       │ Nova tela de relatórios │ https://.../1235│
+│  1236 │ 🐞 erro       │ Issue │ autor e resolvido por│ Erro 500 ao salvar      │ https://.../1236│
+└───────┴──────────────┴───────┴─────────────────────┴─────────────────────────┴─────────────────┘
 
 Total: 3 work item(s) — 1 erro, 1 demanda, 1 task geral.
 ```
