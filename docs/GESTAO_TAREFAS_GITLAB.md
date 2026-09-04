@@ -105,28 +105,34 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 
 ## 4. Relatório de tasks/issues fechadas (`iaw relatorio tasks`)
 
-Lista os work items **fechados** do mês **do usuário do token** (você) e indica
-a categoria de cada um.
+Lista os work items do mês **do usuário do token** (você), divididos em **três
+listas**:
+
+- ✅ **Task geral**
+- 🐞 **Erros (issues)**
+- 📦 **Demandas**
 
 O mês é indicado pelo argumento (ex.: `AGO/2026`). Um item entra no relatório se:
 
 1. **Tiver o label do mês** (ex.: `AGO/2026`) — **prioridade**; ou
 2. **Tiver sido fechado dentro do mês** (`closed_at`) — mesmo sem o label.
 
-Além disso, só entram itens em que você é **autor** ou **assignee**.
+Itens com mais de um label de mês (ex.: `AGO/2026` e `SET/2026`) aparecem **nos
+dois relatórios**. Só entram itens em que você é **autor** ou **assignee**.
 
-O relatório também mostra o seu papel: `autor`, `resolvido por` ou
-`autor e resolvido por`.
+O relatório mostra o papel (`autor`, `resolvido por`, `autor e resolvido por`),
+o status (`fechado`/`execução`) e o link.
 
 ### 4.1 Sintaxe
 
 ```bash
-iaw relatorio tasks [<label-do-mês>] [--project-id <path>]
+iaw relatorio tasks [<label-do-mês>] [--incluir-abertos] [--project-id <path>]
 ```
 
 | Argumento/Opção | Descrição |
 |-----------------|-----------|
 | `<mês>` | Mês do relatório (ex.: `AGO/2026`). Se omitido, usa o **mês atual**. |
+| `--incluir-abertos` | Inclui itens **abertos** com o label do mês, ao final (status `execução`). |
 | `--project-id <path>` | Sobrescreve o projeto padrão. |
 
 ### 4.2 Exemplos
@@ -134,6 +140,9 @@ iaw relatorio tasks [<label-do-mês>] [--project-id <path>]
 ```bash
 # Relatório de um mês específico
 iaw relatorio tasks SET/2026
+
+# Incluindo itens abertos (em execução)
+iaw relatorio tasks SET/2026 --incluir-abertos
 
 # Relatório do mês atual (label gerado automaticamente)
 iaw relatorio tasks
@@ -145,16 +154,21 @@ iaw relatorio tasks SET/2026 --project-id cosinf/suap
 ### 4.3 Saída
 
 ```
-  Relatório de tasks/issues fechadas (SET/2026) — inacio
-┏━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━┓
-┃     # ┃ Categoria    ┃ Tipo  ┃ Papel               ┃ Título                  ┃ Link            ┃
-┡━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━┩
-│  1234 │ ✅ task geral │ Task  │ autor               │ Corrigir N+1 nos diários│ https://.../1234│
-│  1235 │ 📦 demanda    │ Task  │ resolvido por       │ Nova tela de relatórios │ https://.../1235│
-│  1236 │ 🐞 erro       │ Issue │ autor e resolvido por│ Erro 500 ao salvar      │ https://.../1236│
-└───────┴──────────────┴───────┴─────────────────────┴─────────────────────────┴─────────────────┘
+Relatório SET/2026 — inacio
 
-Total: 3 work item(s) — 1 erro, 1 demanda, 1 task geral.
+✅ Task geral
+  #1234  Task  autor              Corrigir N+1 nos diários  https://.../1234
+
+🐞 Erros (issues)
+  #1236  Issue  autor e resolvido por  Erro 500 ao salvar boletim  https://.../1236
+
+📦 Demandas
+  #1235  Task  resolvido por  Nova tela de relatórios  https://.../1235
+
+🔄 Em execução (com --incluir-abertos)
+  #1240  Task  autor  Nova funcionalidade  https://.../1240  (status: execução)
+
+Total: 4 work item(s) — 1 task geral (fechado), 1 erro (fechado), 1 demanda (fechado), 1 task geral (execução).
 ```
 
 A categoria é determinada assim:

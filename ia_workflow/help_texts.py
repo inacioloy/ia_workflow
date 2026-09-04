@@ -73,14 +73,17 @@ COMMAND_HELP: dict[str, dict] = {
     "relatorio": {
         "resumo": "Gera relatórios a partir dos work items do GitLab.",
         "detalhe": (
-            "Subcomando `tasks`: lista os work items do mês do usuário do token "
-            "(autor ou assignee). O item entra se tiver o label do mês (prioridade) "
-            "ou se tiver sido fechado dentro do mês (data de fechamento). Indica a "
-            "categoria (task geral, demanda ou erro) e o papel do usuário ('autor' ou "
-            "'resolvido por'). Se o mês for omitido, usa o mês atual."
+            "Subcomando `tasks`: relatório mensal dos work items do usuário do token "
+            "(autor ou assignee), dividido em três listas — task geral, erros (issues) "
+            "e demandas. O item entra se tiver o label do mês (prioridade) ou se tiver "
+            "sido fechado dentro do mês (data de fechamento); itens com mais de um "
+            "label de mês aparecem em todos os meses correspondentes. Indica categoria, "
+            "papel ('autor'/'resolvido por') e status. Com --incluir-abertos, inclui "
+            "itens abertos com o label do mês ao final (status 'execução')."
         ),
         "exemplos": [
             "iaw relatorio tasks SET/2026",
+            "iaw relatorio tasks SET/2026 --incluir-abertos",
             "iaw relatorio tasks --project-id cosinf/suap",
         ],
     },

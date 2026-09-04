@@ -41,6 +41,9 @@ PAPEL_AUTOR = "autor"
 PAPEL_ASSIGNEE = "resolvido por"
 PAPEL_AMBOS = "autor e resolvido por"
 
+STATUS_FECHADO = "fechado"
+STATUS_EXECUCAO = "execução"
+
 
 def current_month_label(now: datetime | None = None) -> str:
     """Retorna o label do mês atual no formato ``SET/2026``."""
@@ -190,22 +193,23 @@ def create_work_item(
     )
 
 
-def list_closed_work_items(
+def list_month_work_items(
     *,
     label: str,
     project_id: str | None = None,
+    include_open: bool = False,
 ) -> dict[str, Any]:
     """Lista os work items do usuário do token para o mês indicado.
 
-    Um item entra no relatório se **tiver o label do mês** (ex.: ``AGO/2026``)
-    **ou** se tiver sido **fechado** dentro daquele mês (``closed_at``). O label
-    tem prioridade: mesmo que o fechamento tenha ocorrido em outro mês, o item
-    com o label do mês é incluído.
+    Um item **fechado** entra no relatório se **tiver o label do mês** (ex.:
+    ``AGO/2026``) — prioridade — **ou** se tiver sido **fechado** dentro daquele
+    mês (``closed_at``). Com ``include_open=True``, itens **abertos** que tenham
+    o label do mês também entram, ao final, com status ``execução``.
 
     Retorna um dicionário com:
 
-    - ``items``: lista de ``(item, categoria, papel)`` — apenas itens em que o
-      usuário do token é **autor** ou **assignee**;
+    - ``items``: lista de ``(item, categoria, papel, status)`` — apenas itens em
+      que o usuário do token é **autor** ou **assignee**;
     - ``username``: login do usuário do token (para exibição).
     """
     config = cfg.load_config()
@@ -229,15 +233,15 @@ def list_closed_work_items(
     user_id = user.id
     username = getattr(user, "username", "") or "você"
 
-    # Busca apenas os itens do usuário (autor OU assignee) e faz o merge por iid.
+    # --- Fechados (autor OU assignee) -----------------------------------
     authored = client.list_issues(pid, state="closed", author_id=user_id)
     assigned = client.list_issues(pid, state="closed", assignee_id=user_id)
-    by_iid: dict[Any, Any] = {}
+    closed_by_iid: dict[Any, Any] = {}
     for item in authored + assigned:
-        by_iid[getattr(item, "iid", None)] = item
+        closed_by_iid[getattr(item, "iid", None)] = item
 
-    resultado: list[tuple[Any, str, str]] = []
-    for item in by_iid.values():
+    fechados: list[tuple[Any, str, str, str]] = []
+    for item in closed_by_iid.values():
         closed = _closed_at(item)
         in_month = closed is not None and start <= closed < end
         # Prioridade: label do mês; senão, data de fechamento dentro do mês.
@@ -246,8 +250,28 @@ def list_closed_work_items(
         papel = user_role(item, user_id)
         if papel is None:
             continue
-        resultado.append((item, classify_work_item(item), papel))
+        fechados.append((item, classify_work_item(item), papel, STATUS_FECHADO))
 
     # Mais recentes primeiro, para facilitar a leitura.
-    resultado.sort(key=lambda t: getattr(t[0], "iid", 0), reverse=True)
-    return {"items": resultado, "username": username}
+    fechados.sort(key=lambda t: getattr(t[0], "iid", 0), reverse=True)
+
+    # --- Abertos com o label do mês (opcional) --------------------------
+    abertos: list[tuple[Any, str, str, str]] = []
+    if include_open:
+        authored_open = client.list_issues(pid, state="opened", author_id=user_id)
+        assigned_open = client.list_issues(pid, state="opened", assignee_id=user_id)
+        open_by_iid: dict[Any, Any] = {}
+        for item in authored_open + assigned_open:
+            open_by_iid[getattr(item, "iid", None)] = item
+
+        for item in open_by_iid.values():
+            if not _has_label(item, label):
+                continue
+            papel = user_role(item, user_id)
+            if papel is None:
+                continue
+            abertos.append((item, classify_work_item(item), papel, STATUS_EXECUCAO))
+
+        abertos.sort(key=lambda t: getattr(t[0], "iid", 0), reverse=True)
+
+    return {"items": fechados + abertos, "username": username}

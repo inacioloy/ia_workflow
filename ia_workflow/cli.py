@@ -409,15 +409,22 @@ def create_work_item_cmd(
     )
 
 
-@relatorio_app.command("tasks", help="Lista as tasks/issues fechadas no mês (por data de fechamento).")
+@relatorio_app.command("tasks", help="Relatório do mês dividido em task geral, erros e demandas.")
 def relatorio_tasks(
     label: str = typer.Argument(None, help="Mês do relatório (ex: AGO/2026). Padrão: mês atual."),
     project_id: str = typer.Option(None, "--project-id", help="Path do projeto no GitLab (ex: suap)."),
+    incluir_abertos: bool = typer.Option(
+        False,
+        "--incluir-abertos",
+        help="Inclui itens abertos com o label do mês (status 'execução').",
+    ),
 ) -> None:
-    """Lista work items fechados no mês e indica a categoria (task geral, demanda ou erro)."""
+    """Lista os work items do mês divididos em task geral, erros e demandas."""
     label = (label or work_items.current_month_label()).strip().upper()
     try:
-        resultado = work_items.list_closed_work_items(label=label, project_id=project_id)
+        resultado = work_items.list_month_work_items(
+            label=label, project_id=project_id, include_open=incluir_abertos
+        )
     except GitLabError as exc:
         console.print(f"[red]Erro:[/red] {exc}")
         raise typer.Exit(code=1) from exc
@@ -426,40 +433,81 @@ def relatorio_tasks(
     username = resultado["username"]
 
     if not items:
-        console.print(
-            f"Nenhum work item fechado com o label '[cyan]{label}[/cyan]' "
-            f"para o usuário [cyan]{username}[/cyan] (autor ou assignee)."
+        msg = (
+            f"Nenhum work item no mês '[cyan]{label}[/cyan]' para o usuário "
+            f"[cyan]{username}[/cyan] (autor ou assignee)."
         )
+        if not incluir_abertos:
+            msg += " Use [cyan]--incluir-abertos[/cyan] para incluir itens abertos."
+        console.print(msg)
         return
 
-    table = Table(title=f"Relatório de tasks/issues fechadas ({label}) — {username}")
-    table.add_column("#", justify="right", style="cyan")
-    table.add_column("Categoria")
-    table.add_column("Tipo")
-    table.add_column("Papel")
-    table.add_column("Título", overflow="fold")
-    table.add_column("Link", overflow="fold")
+    fechados: dict[str, list] = {
+        work_items.CATEGORIA_TASK_GERAL: [],
+        work_items.CATEGORIA_ERRO: [],
+        work_items.CATEGORIA_DEMANDA: [],
+    }
+    abertos = []
+    for item, categoria, papel, status in items:
+        if status == work_items.STATUS_EXECUCAO:
+            abertos.append((item, categoria, papel, status))
+        else:
+            fechados.setdefault(categoria, []).append((item, categoria, papel, status))
 
     icons = {
         work_items.CATEGORIA_ERRO: "🐞",
         work_items.CATEGORIA_DEMANDA: "📦",
         work_items.CATEGORIA_TASK_GERAL: "✅",
     }
-    contagem: dict[str, int] = {}
-    for item, categoria, papel in items:
-        contagem[categoria] = contagem.get(categoria, 0) + 1
-        table.add_row(
-            f"#{getattr(item, 'iid', '')}",
-            f"{icons.get(categoria, '•')} {categoria}",
-            work_items.item_type_label(item),
-            papel,
-            getattr(item, "title", "") or "",
-            getattr(item, "web_url", "") or "",
-        )
 
-    console.print(table)
-    resumo = ", ".join(f"{n} {c}" for c, n in sorted(contagem.items()))
-    console.print(f"\n[bold]Total:[/bold] {len(items)} work item(s) — {resumo}.")
+    secoes = [
+        ("✅ Task geral", fechados[work_items.CATEGORIA_TASK_GERAL]),
+        ("🐞 Erros (issues)", fechados[work_items.CATEGORIA_ERRO]),
+        ("📦 Demandas", fechados[work_items.CATEGORIA_DEMANDA]),
+    ]
+    if incluir_abertos:
+        secoes.append(("🔄 Em execução", abertos))
+
+    console.print(f"\n[bold blue]Relatório {label} — {username}[/bold blue]\n")
+
+    total = 0
+    contagem: dict[tuple[str, str], int] = {}
+    for titulo, lista in secoes:
+        if not lista:
+            continue
+        total += len(lista)
+        table = Table(title=titulo)
+        table.add_column("#", justify="right", style="cyan")
+        table.add_column("Categoria")
+        table.add_column("Tipo")
+        table.add_column("Papel")
+        table.add_column("Status")
+        table.add_column("Título", overflow="fold")
+        table.add_column("Link", overflow="fold")
+        for item, categoria, papel, status in lista:
+            contagem[(categoria, status)] = contagem.get((categoria, status), 0) + 1
+            table.add_row(
+                f"#{getattr(item, 'iid', '')}",
+                f"{icons.get(categoria, '•')} {categoria}",
+                work_items.item_type_label(item),
+                papel,
+                status,
+                getattr(item, "title", "") or "",
+                getattr(item, "web_url", "") or "",
+            )
+        console.print(table)
+
+    partes = []
+    for categoria in (
+        work_items.CATEGORIA_TASK_GERAL,
+        work_items.CATEGORIA_ERRO,
+        work_items.CATEGORIA_DEMANDA,
+    ):
+        for status in (work_items.STATUS_FECHADO, work_items.STATUS_EXECUCAO):
+            n = contagem.get((categoria, status), 0)
+            if n:
+                partes.append(f"{n} {categoria} ({status})")
+    console.print(f"\n[bold]Total:[/bold] {total} work item(s) — {', '.join(partes)}.")
 
 
 @app.command(help="Orquestra a IA pelo workflow YAML (.iaw/workflows).")
