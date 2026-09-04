@@ -24,12 +24,13 @@ from . import importer
 from . import notify
 from . import project
 from . import publish
+from . import recorder
 from . import runner
 from . import skills as skills_mod
 from . import state
 from . import work_items
 from . import workspace
-from .engines import available_engines
+from .engines import available_engines, build_engine
 from .gitlab_client import GitLabClient, GitLabError
 from .workflow_parser import WorkflowError, available_workflows
 
@@ -373,6 +374,12 @@ def create_work_item_cmd(
     ),
     title: str = typer.Option(None, "--title", help="Título do work item (senão será perguntado)."),
     project_id: str = typer.Option(None, "--project-id", help="Path do projeto no GitLab (ex: suap)."),
+    recording: bool = typer.Option(
+        False,
+        "--recording",
+        "--record",
+        help="Inicia a gravação de atividades (encerre com `iaw finish-task`).",
+    ),
 ) -> None:
     """Cria uma Task (--task) ou Issue (--issue) atribuída ao seu usuário."""
     if task and issue:
@@ -407,6 +414,22 @@ def create_work_item_cmd(
         f"   Categoria: [bold]{categoria}[/bold] | "
         f"Labels: {', '.join(getattr(item, 'labels', None) or [])}"
     )
+
+    if recording:
+        pid = project_id or cfg.get("gitlab_project") or ""
+        try:
+            recorder.start_recording(
+                iid=getattr(item, "iid"),
+                project_id=pid,
+                title=title.strip(),
+            )
+        except RuntimeError as exc:
+            console.print(f"[yellow]Aviso:[/yellow] {exc}")
+        else:
+            console.print(
+                "[bold green]● Gravação iniciada.[/bold green] "
+                "Ao terminar, rode [cyan]iaw finish-task[/cyan] para fechar a task."
+            )
 
 
 @relatorio_app.command("tasks", help="Relatório do mês dividido em task geral, erros e demandas.")
@@ -566,7 +589,62 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
-@app.command("finish-task", help="Encerra a tarefa: resumo + relatório (+ MR com --create-mr).")
+def _finish_recording(session: dict) -> None:
+    """Encerra a gravação e atualiza/fecha o work item no GitLab."""
+    activity = recorder.stop_recording(session)
+
+    console.print("[dim]Gravação encerrada.[/dim]")
+    if activity:
+        console.print("\n[bold]Atividades registradas:[/bold]")
+        console.print(activity, markup=False)
+    else:
+        console.print("\n[dim]Nenhuma atividade registrada durante a gravação.[/dim]")
+
+    sugerido = ""
+    try:
+        engine = build_engine()
+        prompt = (
+            "Resuma em até 3 frases, em pt-BR, o que foi feito com base no "
+            "histórico de janelas ativas abaixo. Seja objetivo.\n\n"
+            + (activity or "(sem registro de atividades)")
+        )
+        result = engine.generate(prompt)
+        if result.success and result.output.strip():
+            sugerido = result.output.strip()
+    except Exception:  # noqa: BLE001 — motor indisponível não deve travar o encerramento
+        pass
+
+    resumo = Prompt.ask("Resumo do que foi feito", default=sugerido or "").strip()
+
+    update_title = Confirm.ask("Deseja atualizar o título da task?", default=False)
+    new_title = None
+    if update_title:
+        new_title = Prompt.ask("Título", default=session.get("title", "")).strip()
+
+    try:
+        item = work_items.finish_work_item(
+            project_id=session["project_id"],
+            iid=session["iid"],
+            title=new_title or None,
+            description=resumo or None,
+            close=True,
+        )
+    except GitLabError as exc:
+        console.print(f"[red]Erro:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    recorder.clear_session()
+    console.print(
+        f"\n[bold green]✓ Tarefa encerrada.[/bold green] "
+        f"#{getattr(item, 'iid', session['iid'])} — [cyan]{getattr(item, 'web_url', '')}[/cyan]"
+    )
+    console.print(f"   Labels: {', '.join(getattr(item, 'labels', None) or [])}")
+
+
+@app.command(
+    "finish-task",
+    help="Encerra a tarefa: resumo + relatório (+ MR). Fecha também a gravação de `iaw create --recording`.",
+)
 def finish_task(
     issue_id: int = typer.Option(None, "--issue-id", help="Id da Issue (se não puder inferir da branch)."),
     summary: str = typer.Option(None, "--summary", help="Resumo manual (pula a geração via IA)."),
@@ -580,6 +658,12 @@ def finish_task(
     keep_workspace: bool = typer.Option(False, "--keep-workspace", help="Mantém .iaw_workspace/ após concluir."),
 ) -> None:
     """Encerra a tarefa: gera resumo, atualiza o relatório e (opcionalmente) abre o MR."""
+    # Fluxo de gravação (iaw create --recording) tem prioridade.
+    session = recorder.load_session()
+    if session is not None:
+        _finish_recording(session)
+        return
+
     try:
         result = publish.publish_task(
             issue_id=issue_id,

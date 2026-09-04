@@ -59,7 +59,7 @@ O token precisa ter permissão `api` (ou `write_repository` + `write_issues`).
 ### 3.1 Sintaxe
 
 ```bash
-iaw create (--task | --issue) [--demanda] [--title <título>] [--project-id <path>]
+iaw create (--task | --issue) [--demanda] [--title <título>] [--project-id <path>] [--recording]
 ```
 
 | Opção | Descrição |
@@ -69,6 +69,7 @@ iaw create (--task | --issue) [--demanda] [--title <título>] [--project-id <pat
 | `--demanda` | Só com `--task`: adiciona o label `demandas` (task de demanda). |
 | `--title <t>` | Título do work item. Se omitido, o `iaw` **pergunta** o título. |
 | `--project-id <path>` | Sobrescreve o projeto padrão (ex.: `cosinf/suap`). |
+| `--recording`, `--record` | Inicia a gravação de atividades (janela ativa). Encerre com `iaw finish-task`. |
 
 O work item é criado com **assignee = seu usuário** (o usuário autenticado do
 token) e já recebe o **label do mês atual**.
@@ -100,6 +101,38 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
    #1234 — Corrigir N+1 na listagem de diários
    Categoria: task geral | Labels: SET/2026
 ```
+
+### 3.4 Gravação de atividades (`--recording`)
+
+Com `--recording`, o `iaw` cria o work item **e já inicia um processo em segundo
+plano** que registra, a cada poucos segundos, o **título da janela ativa** (com
+timestamp) num log local. Não há captura de tela nem dependências extras: no
+Windows usa a API nativa e no Linux usa `xdotool` (quando instalado).
+
+```bash
+# 1. Cria a task e começa a gravar as janelas em que você trabalha
+iaw create --task --title "Enviar RIT com atividades do mês" --recording
+
+# 2. ... realiza suas atividades normalmente ...
+
+# 3. Encerra: para a gravação, sugere o resumo e fecha a task
+iaw finish-task
+```
+
+O `iaw finish-task` detecta a gravação ativa e, em sequência:
+
+1. **Para a gravação** e mostra o histórico de janelas registradas;
+2. **Sugere um resumo** (gerado pelo motor de IA a partir do histórico — você
+   pode editar antes de confirmar);
+3. **Pergunta se quer atualizar o título** da task;
+4. **Atualiza e fecha o work item** no GitLab com: título (atualizado ou
+   original), descrição = resumo, **assignee = você** (já definido na criação),
+   **data de fechamento** (o GitLab preenche ao fechar) e **label do mês**
+   (garantido, preservando os labels existentes).
+
+> O processo de gravação roda em background e é encerrado automaticamente pelo
+> `finish-task`. Se precisar cancelar sem fechar, basta apagar o arquivo
+> `.iaw_workspace/recording_session.json` e o processo para na próxima iteração.
 
 ---
 
@@ -202,6 +235,18 @@ iaw create --issue --title "Erro 500 ao gerar PDF de boletim"
 iaw relatorio tasks SET/2026
 ```
 
+Fluxo com gravação de atividades:
+
+```bash
+# 1. Cria a task já gravando as janelas ativas
+iaw create --task --title "Enviar RIT com atividades do mês" --recording
+
+# 2. ... trabalha normalmente ...
+
+# 3. Para a gravação, sugere o resumo e fecha a task
+iaw finish-task
+```
+
 ---
 
 ## 6. Referência rápida
@@ -212,6 +257,7 @@ iaw relatorio tasks SET/2026
 | `iaw create --task --demanda --title "..."` | Cria uma Task de demanda |
 | `iaw create --issue --title "..."` | Cria uma Issue (erro/bug) |
 | `iaw create --task` | Cria Task perguntando o título |
+| `iaw create --task --title "..." --recording` | Cria Task e grava janelas ativas; feche com `iaw finish-task` |
 | `iaw relatorio tasks SET/2026` | Lista fechadas do mês (task geral/demanda/erro) |
 | `iaw relatorio tasks` | Lista fechadas do mês atual |
 | `iaw relatorio tasks --project-id cosinf/suap` | Relatório em outro projeto |

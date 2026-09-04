@@ -95,6 +95,20 @@ class GitLabClient:
         except Exception as exc:  # noqa: BLE001
             raise GitLabError(f"Não foi possível criar o work item: {exc}") from exc
 
+    def update_issue(self, project_id: str, issue_id: int, **kwargs: Any) -> Any:
+        """Atualiza uma Issue/Task (título, descrição, labels, fechamento...)."""
+        try:
+            project = self.get_project(project_id)
+            issue = project.issues.get(issue_id)
+            for key, value in kwargs.items():
+                setattr(issue, key, value)
+            issue.save()
+            return issue
+        except GitLabError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GitLabError(f"Não foi possível atualizar o work item: {exc}") from exc
+
     def list_issues(
         self,
         project_id: str,

@@ -193,6 +193,37 @@ def create_work_item(
     )
 
 
+def finish_work_item(
+    *,
+    project_id: str,
+    iid: int,
+    title: str | None = None,
+    description: str | None = None,
+    close: bool = True,
+) -> Any:
+    """Atualiza/fecha um work item preservando os labels existentes.
+
+    Garante o label do mês atual e, se ``close=True``, fecha o item (o GitLab
+    preenche a data de fechamento). O assignee já é o usuário do token desde a
+    criação, então não precisa ser alterado.
+    """
+    client = GitLabClient()
+    item = client.get_issue(project_id, iid)
+    labels = [str(l) for l in (getattr(item, "labels", None) or [])]
+    month = current_month_label()
+    if month not in labels:
+        labels.append(month)
+
+    updates: dict[str, Any] = {"labels": ",".join(labels)}
+    if title is not None:
+        updates["title"] = title
+    if description is not None:
+        updates["description"] = description
+    if close:
+        updates["state_event"] = "close"
+    return client.update_issue(project_id, iid, **updates)
+
+
 def list_month_work_items(
     *,
     label: str,

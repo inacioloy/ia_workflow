@@ -238,6 +238,11 @@ iaw run --workflow bug_fix --issue-id 4512 --resume       # retoma do state.json
 **`iaw finish-task`** gera o `git diff`, pede um resumo executivo à IA e registra
 a atividade no relatório mensal. Por padrão **não** abre MR; use `--create-mr`.
 
+Se houver uma **gravação ativa** (iniciada por `iaw create --recording`), o
+`finish-task` assume o fluxo de gravação: para o registro, sugere um resumo a
+partir das janelas ativas e **fecha a Task/Issue** no GitLab (título, descrição,
+assignee, data de fechamento e label do mês).
+
 Opções úteis do `finish-task`:
 
 ```bash
@@ -245,6 +250,14 @@ iaw finish-task --create-mr          # abre o MR (por padrão, só atualiza o re
 iaw finish-task --summary "texto"    # pula a geração do resumo via IA
 iaw finish-task --target-branch main # branch de destino do MR
 iaw finish-task --keep-workspace     # mantém .iaw_workspace/ após concluir
+```
+
+Gravação de atividades (Windows/Linux, sem dependências extras):
+
+```bash
+iaw create --task --title "Enviar RIT" --recording  # grava janelas ativas
+# ... trabalha normalmente ...
+iaw finish-task  # fecha a task com resumo gerado do histórico de janelas
 ```
 
 ---
