@@ -30,7 +30,7 @@ from . import skills as skills_mod
 from . import state
 from . import work_items
 from . import workspace
-from .engines import available_engines, build_engine
+from .engines import available_engines, build_engine, get_engine
 from .gitlab_client import GitLabClient, GitLabError
 from .workflow_parser import WorkflowError, available_workflows
 
@@ -378,7 +378,7 @@ def create_work_item_cmd(
         False,
         "--recording",
         "--record",
-        help="Inicia a gravação de atividades (encerre com `iaw finish-task`).",
+        help="Grava janelas ativas e screenshots da tela (encerre com `iaw finish-task`).",
     ),
 ) -> None:
     """Cria uma Task (--task) ou Issue (--issue) atribuída ao seu usuário."""
@@ -589,11 +589,60 @@ def run(
     raise typer.Exit(code=exit_code)
 
 
+def _suggest_summary(activity: str, shots: list[str]) -> str:
+    """Sugere um resumo: por visão (agy/Gemini) se houver screenshots, senão texto."""
+    if shots:
+        try:
+            engine = get_engine(
+                "antigravity",
+                skip_permissions=cfg.get("antigravity_skip_permissions", True),
+            )
+            paths = "\n".join(f"- {p}" for p in shots)
+            prompt = (
+                "Você é um assistente que resume o trabalho de um usuário a partir "
+                "de screenshots da tela. Abra cada arquivo de imagem abaixo com a "
+                "ferramenta view_file (uma por vez) e entenda o que estava sendo "
+                "feito. Em seguida, escreva um resumo de até 3 frases, em pt-BR, do "
+                "trabalho realizado, mencionando as atividades principais (ex.: "
+                "respondendo e-mails, conversando no WhatsApp, editando código em "
+                "determinado arquivo etc.).\n\n"
+                "Screenshots em ordem cronológica:\n"
+                f"{paths}\n\n"
+                "Histórico de janelas ativas (contexto auxiliar):\n"
+                f"{activity or '(sem registro)'}"
+            )
+            console.print("[dim]Gerando resumo a partir dos screenshots (agy/Gemini)...[/dim]")
+            result = engine.generate(prompt)
+            if result.success and result.output.strip():
+                return result.output.strip()
+        except Exception:  # noqa: BLE001 — falha na visão não deve travar o encerramento
+            pass
+
+    try:
+        engine = build_engine()
+        prompt = (
+            "Resuma em até 3 frases, em pt-BR, o que foi feito com base no "
+            "histórico de janelas ativas abaixo. Seja objetivo.\n\n"
+            + (activity or "(sem registro de atividades)")
+        )
+        result = engine.generate(prompt)
+        if result.success and result.output.strip():
+            return result.output.strip()
+    except Exception:  # noqa: BLE001 — motor indisponível não deve travar o encerramento
+        pass
+    return ""
+
+
 def _finish_recording(session: dict) -> None:
     """Encerra a gravação e atualiza/fecha o work item no GitLab."""
     activity = recorder.stop_recording(session)
+    shots = recorder.list_screenshots(session)
 
     console.print("[dim]Gravação encerrada.[/dim]")
+    if shots:
+        console.print(
+            f"[dim]{len(shots)} screenshot(s) serão usados no resumo.[/dim]"
+        )
     if activity:
         console.print("\n[bold]Atividades registradas:[/bold]")
         console.print(activity, markup=False)
@@ -606,19 +655,7 @@ def _finish_recording(session: dict) -> None:
                 f"[cyan]{err_log}[/cyan] — veja o conteúdo para diagnosticar."
             )
 
-    sugerido = ""
-    try:
-        engine = build_engine()
-        prompt = (
-            "Resuma em até 3 frases, em pt-BR, o que foi feito com base no "
-            "histórico de janelas ativas abaixo. Seja objetivo.\n\n"
-            + (activity or "(sem registro de atividades)")
-        )
-        result = engine.generate(prompt)
-        if result.success and result.output.strip():
-            sugerido = result.output.strip()
-    except Exception:  # noqa: BLE001 — motor indisponível não deve travar o encerramento
-        pass
+    sugerido = _suggest_summary(activity, shots)
 
     resumo = Prompt.ask("Resumo do que foi feito", default=sugerido or "").strip()
 

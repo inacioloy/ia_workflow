@@ -28,6 +28,8 @@ dependencies = [
     "tomli>=2.0.1; python_version < '3.11'",
     "tomli-w>=1.0.0",
     "pyyaml>=6.0.1",
+    "mss>=9.0.1",
+    "pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]

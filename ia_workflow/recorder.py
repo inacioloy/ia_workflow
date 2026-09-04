@@ -1,11 +1,12 @@
-"""Gravação de atividades (janela ativa) para o fluxo ``iaw create --recording``.
+"""Gravação de atividades para o fluxo ``iaw create --recording``.
 
-Enquanto o usuário trabalha, um processo em segundo plano registra o título da
-janela ativa (com timestamp) num arquivo de log. No ``iaw finish-task``, a
-gravação é encerrada e o histórico é usado para sugerir o resumo.
+Enquanto o usuário trabalha, um processo em segundo plano registra:
 
-Sem dependências extras: usa ``ctypes`` no Windows e ``xdotool`` no Linux
-(quando disponível).
+- o **título da janela ativa** (com timestamp) num arquivo de log;
+- **screenshots periódicos** da tela (todos os monitores) com ``mss``.
+
+No ``iaw finish-task``, a gravação é encerrada e o histórico (screenshots +
+títulos) é usado para sugerir o resumo.
 """
 
 from __future__ import annotations
@@ -22,6 +23,8 @@ from . import workspace
 
 SESSION_FILE = workspace.WORKSPACE_ROOT / "recording_session.json"
 DEFAULT_INTERVAL = 5.0
+DEFAULT_SHOT_INTERVAL = 20.0
+MAX_SHOTS_FOR_SUMMARY = 24
 
 
 def _windows_foreground() -> tuple[str, str]:
@@ -116,6 +119,75 @@ def get_active_window_title() -> str:
     return ""
 
 
+def capture_screenshot(shots_dir: Path, name: str) -> str | None:
+    """Captura a tela inteira (todos os monitores) e salva em ``shots_dir``.
+
+    Usa ``mss`` (monitor 0 → tela virtual que cobre todos os monitores). Com
+    Pillow disponível, diminui a imagem e salva JPEG (bem menor para o resumo
+    por visão); sem Pillow, salva PNG em resolução cheia via ``mss``.
+
+    Retorna o caminho do arquivo salvo, ou ``None`` se o ``mss`` não estiver
+    instalado ou a captura falhar (o gravador continua funcionando só com
+    os títulos de janela).
+    """
+    try:
+        import mss
+    except ImportError:
+        return None
+    try:
+        # ``MSS`` é o nome em mss>=10; ``mss.mss`` é o fallback para mss<10.
+        screenshot_cls = getattr(mss, "MSS", mss.mss)
+        with screenshot_cls() as sct:
+            monitor = sct.monitors[0]  # tela virtual (todos os monitores)
+            shot = sct.grab(monitor)
+            try:
+                from PIL import Image
+
+                img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                img.thumbnail((1600, 1600))  # preserva a proporção
+                out = shots_dir / name.replace(".png", ".jpg")
+                img.save(out, "JPEG", quality=70)
+                return str(out)
+            except ImportError:
+                pass
+            return sct.shot(mon=-1, output=str(shots_dir / name))
+    except Exception:  # noqa: BLE001 — sem tela/display não pode travar a gravação
+        return None
+
+
+def list_screenshots(
+    session: dict[str, Any], max_shots: int = MAX_SHOTS_FOR_SUMMARY
+) -> list[str]:
+    """Retorna os caminhos dos screenshots da sessão, amostrados uniformemente.
+
+    Se houver mais de ``max_shots`` imagens, seleciona uma amostra temporal
+    (preservando a primeira e a última) para não estourar o contexto do modelo.
+    """
+    session_dir = Path(session.get("session_dir", ""))
+    shots_dir = session_dir / "shots"
+    if not shots_dir.is_dir():
+        return []
+    shots = sorted(
+        [p for p in shots_dir.glob("*") if p.suffix.lower() in (".png", ".jpg", ".jpeg")],
+        key=lambda p: p.name,
+    )
+    if not shots:
+        return []
+    if len(shots) <= max_shots:
+        return [str(p) for p in shots]
+    if max_shots <= 1:
+        return [str(shots[0])]
+    step = (len(shots) - 1) / (max_shots - 1)
+    picked: list[Path] = []
+    seen: set[Path] = set()
+    for i in range(max_shots):
+        p = shots[round(i * step)]
+        if p not in seen:
+            seen.add(p)
+            picked.append(p)
+    return [str(p) for p in picked]
+
+
 def load_session() -> dict[str, Any] | None:
     """Lê a sessão de gravação ativa (se existir)."""
     if not SESSION_FILE.exists():
@@ -141,6 +213,7 @@ def start_recording(
     project_id: str,
     title: str,
     interval: float = DEFAULT_INTERVAL,
+    shot_interval: float = DEFAULT_SHOT_INTERVAL,
 ) -> dict[str, Any]:
     """Cria a sessão de gravação e inicia o processo em segundo plano."""
     if load_session() is not None:
@@ -153,11 +226,17 @@ def start_recording(
     # Caminho absoluto: o subprocesso grava em background e não depende do cwd.
     session_dir = session_dir.resolve()
 
+    shots_dir = session_dir / "shots"
+    shots_dir.mkdir(parents=True, exist_ok=True)
+
     # Limpa resíduos de uma gravação anterior do mesmo work item.
     (session_dir / "activity.log").unlink(missing_ok=True)
     (session_dir / "recorder.err.log").unlink(missing_ok=True)
     (session_dir / "stop").unlink(missing_ok=True)
     (session_dir / "done").unlink(missing_ok=True)
+    for old in shots_dir.glob("*"):
+        if old.suffix.lower() in (".png", ".jpg", ".jpeg"):
+            old.unlink(missing_ok=True)
 
     session: dict[str, Any] = {
         "iid": iid,
@@ -165,7 +244,9 @@ def start_recording(
         "title": title,
         "started_at": datetime.now().isoformat(timespec="seconds"),
         "session_dir": str(session_dir),
+        "shots_dir": str(shots_dir),
         "interval": interval,
+        "shot_interval": shot_interval,
     }
     workspace.WORKSPACE_ROOT.mkdir(parents=True, exist_ok=True)
     SESSION_FILE.write_text(
@@ -193,7 +274,14 @@ def start_recording(
 
     try:
         subprocess.Popen(
-            [sys.executable, "-m", "ia_workflow.recorder", str(session_dir), str(interval)],
+            [
+                sys.executable,
+                "-m",
+                "ia_workflow.recorder",
+                str(session_dir),
+                str(interval),
+                str(shot_interval),
+            ],
             **kwargs,
         )
     finally:
@@ -222,15 +310,23 @@ def stop_recording(session: dict[str, Any]) -> str:
     return ""
 
 
-def record_loop(session_dir: Path, interval: float) -> None:
+def record_loop(
+    session_dir: Path,
+    interval: float,
+    shot_interval: float = DEFAULT_SHOT_INTERVAL,
+) -> None:
     """Loop de gravação executado em subprocesso."""
     session_dir = Path(session_dir)
     log_path = session_dir / "activity.log"
+    shots_dir = session_dir / "shots"
     stop_path = session_dir / "stop"
     done_path = session_dir / "done"
     last_title: str | None = None
+    last_shot = 0.0
+    shot_index = 0
 
     try:
+        shots_dir.mkdir(parents=True, exist_ok=True)
         # Marca o início da gravação: confirma que o processo subiu mesmo que
         # nenhuma mudança de janela seja detectada depois.
         with open(log_path, "a", encoding="utf-8") as f:
@@ -245,6 +341,16 @@ def record_loop(session_dir: Path, interval: float) -> None:
                 with open(log_path, "a", encoding="utf-8") as f:
                     f.write(f"[{ts}] {title}\n")
                 last_title = title
+
+            # Screenshot periódico (todos os monitores), independente da mudança
+            # de janela — captura leituras/atividades dentro da mesma janela. Os
+            # arquivos ficam em shots/ e são listados por ``list_screenshots``.
+            now = time.time()
+            if shot_interval > 0 and now - last_shot >= shot_interval:
+                last_shot = now
+                shot_index += 1
+                capture_screenshot(shots_dir, f"{shot_index:04d}.png")
+
             if stop_path.exists():
                 break
             time.sleep(interval)
@@ -254,13 +360,16 @@ def record_loop(session_dir: Path, interval: float) -> None:
 
 def main() -> None:
     """Ponto de entrada do subprocesso: ``python -m ia_workflow.recorder``."""
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         print(
-            "uso: python -m ia_workflow.recorder <session_dir> <intervalo>",
+            "uso: python -m ia_workflow.recorder <session_dir> <intervalo> [shot_interval]",
             file=sys.stderr,
         )
         sys.exit(2)
-    record_loop(Path(sys.argv[1]), float(sys.argv[2]))
+    session_dir = Path(sys.argv[1])
+    interval = float(sys.argv[2])
+    shot_interval = float(sys.argv[3]) if len(sys.argv) >= 4 else DEFAULT_SHOT_INTERVAL
+    record_loop(session_dir, interval, shot_interval)
 
 
 if __name__ == "__main__":

@@ -39,7 +39,7 @@ iaw start-task 4512            # baixa a Issue do GitLab e gera o artefato
 iaw create --task --title "Corrigir N+1 nos diários"      # task geral
 iaw create --task --demanda --title "Nova tela de relatórios"  # demanda
 iaw create --issue --title "Erro 500 ao salvar boletim"   # erro (bug)
-iaw create --task --title "Enviar RIT" --recording  # grava janelas ativas
+iaw create --task --title "Enviar RIT" --recording  # grava janelas + screenshots
 iaw relatorio tasks SET/2026   # tasks/issues fechadas do mês (com categoria)
 
 iaw run --workflow bug_fix --issue-id 4512   # orquestra a IA (indicando a tarefa)
@@ -107,10 +107,10 @@ steps:
 | `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md (IA) |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
-| `iaw create [--task\|--issue] [--demanda] [--title <t>] [--recording]` | Cria Task/Issue no GitLab (assignee = você, label do mês; `--recording` grava as janelas ativas) |
+| `iaw create [--task\|--issue] [--demanda] [--title <t>] [--recording]` | Cria Task/Issue no GitLab (assignee = você, label do mês; `--recording` grava janelas + screenshots) |
 | `iaw relatorio tasks <label>` | Lista tasks/issues fechadas do mês (task geral/demanda/erro) |
 | `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--create-mr]` | Orquestra o workflow (tarefa, log e/ou abrindo MR ao final) |
-| `iaw finish-task` | Atualiza o relatório (com `--create-mr`, abre o MR); encerra a gravação de `iaw create --recording` |
+| `iaw finish-task` | Atualiza o relatório (com `--create-mr`, abre o MR); encerra a gravação de `iaw create --recording` (resumo por visão via Gemini/agy) |
 | `iaw status` | Acompanha execuções |
 | `iaw skill list/create/add/update` | Gerencia skills (criar, instalar, atualizar) |
 | `iaw import-legacy [--dry-run]` | Centraliza skills/agents do legado em `.iaw/` |
@@ -143,7 +143,7 @@ ia_workflow/                 # repositório da ferramenta
 │   ├── skills.py            # gerenciador de skills
 │   ├── gitlab_client.py     # integração GitLab
 │   ├── work_items.py        # create/relatorio de Tasks e Issues (labels do mês)
-│   ├── recorder.py          # gravação de janelas ativas (iaw create --recording)
+│   ├── recorder.py          # gravação de janelas + screenshots (iaw create --recording)
 │   ├── publish.py           # finish-task (resumo + relatório; MR opcional)
 │   ├── reports.py           # relatório mensal
 │   └── engines/             # Pi Coding (RPC), Aider e Antigravity (subprocess/CLI)

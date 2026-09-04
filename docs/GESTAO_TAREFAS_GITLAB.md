@@ -69,7 +69,7 @@ iaw create (--task | --issue) [--demanda] [--title <título>] [--project-id <pat
 | `--demanda` | Só com `--task`: adiciona o label `demandas` (task de demanda). |
 | `--title <t>` | Título do work item. Se omitido, o `iaw` **pergunta** o título. |
 | `--project-id <path>` | Sobrescreve o projeto padrão (ex.: `cosinf/suap`). |
-| `--recording`, `--record` | Inicia a gravação de atividades (janela ativa). Encerre com `iaw finish-task`. |
+| `--recording`, `--record` | Grava janelas ativas + screenshots da tela. Encerre com `iaw finish-task`. |
 
 O work item é criado com **assignee = seu usuário** (o usuário autenticado do
 token) e já recebe o **label do mês atual**.
@@ -105,12 +105,15 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 ### 3.4 Gravação de atividades (`--recording`)
 
 Com `--recording`, o `iaw` cria o work item **e já inicia um processo em segundo
-plano** que registra, a cada poucos segundos, o **título da janela ativa** (com
-timestamp) num log local. Não há captura de tela nem dependências extras: no
-Windows usa a API nativa e no Linux usa `xdotool` (quando instalado).
+plano** que registra:
+
+- o **título da janela ativa** (com timestamp) num log local — Windows via API
+  nativa, Linux via `xdotool` (quando instalado);
+- **screenshots periódicos** da tela inteira (todos os monitores) com `mss`,
+  salvos em `.iaw_workspace/recording/<id>/shots/` (redimensionados para JPEG).
 
 ```bash
-# 1. Cria a task e começa a gravar as janelas em que você trabalha
+# 1. Cria a task e começa a gravar (janelas + screenshots)
 iaw create --task --title "Enviar RIT com atividades do mês" --recording
 
 # 2. ... realiza suas atividades normalmente ...
@@ -122,8 +125,10 @@ iaw finish-task
 O `iaw finish-task` detecta a gravação ativa e, em sequência:
 
 1. **Para a gravação** e mostra o histórico de janelas registradas;
-2. **Sugere um resumo** (gerado pelo motor de IA a partir do histórico — você
-   pode editar antes de confirmar);
+2. **Sugere um resumo**: com screenshots capturados, o `iaw` envia as imagens
+   para o **Gemini via `agy`** (motor Antigravity), que **lê as telas** e resume
+   o que foi feito — você pode editar antes de confirmar. Sem screenshots, o
+   resumo é gerado a partir dos títulos das janelas pelo motor configurado;
 3. **Pergunta se quer atualizar o título** da task;
 4. **Atualiza e fecha o work item** no GitLab com: título (atualizado ou
    original), descrição = resumo, **assignee = você** (já definido na criação),
@@ -257,7 +262,7 @@ iaw finish-task
 | `iaw create --task --demanda --title "..."` | Cria uma Task de demanda |
 | `iaw create --issue --title "..."` | Cria uma Issue (erro/bug) |
 | `iaw create --task` | Cria Task perguntando o título |
-| `iaw create --task --title "..." --recording` | Cria Task e grava janelas ativas; feche com `iaw finish-task` |
+| `iaw create --task --title "..." --recording` | Cria Task e grava janelas + screenshots; feche com `iaw finish-task` |
 | `iaw relatorio tasks SET/2026` | Lista fechadas do mês (task geral/demanda/erro) |
 | `iaw relatorio tasks` | Lista fechadas do mês atual |
 | `iaw relatorio tasks --project-id cosinf/suap` | Relatório em outro projeto |

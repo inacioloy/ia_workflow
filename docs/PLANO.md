@@ -88,7 +88,7 @@ Uma **CLI orquestradora em Python** (`ia_workflow`, comando `iaw`), instalada gl
 ### Fase 6 — Gestão de work items no GitLab ✅ concluída
 - [x] `iaw create --task/--issue [--demanda]` (`work_items.py`): cria work item com assignee = usuário e labels (`bug`/`demandas` + mês/ano)
 - [x] `iaw relatorio tasks <MÊS/ANO>`: lista fechadas do mês divididas em task geral/erro/demanda (+ `--incluir-abertos`)
-- [x] `iaw create --recording` + `recorder.py`: grava janelas ativas (Windows/ctypes, Linux/xdotool) e `iaw finish-task` fecha a task com resumo sugerido pela IA
+- [x] `iaw create --recording` + `recorder.py`: grava janelas ativas (Windows/ctypes, Linux/xdotool) e **screenshots** (`mss`); `iaw finish-task` fecha a task com resumo por visão (Gemini/agy) ou por texto
 
 ## 5. Estrutura de diretórios (alvo)
 

@@ -240,8 +240,9 @@ a atividade no relatório mensal. Por padrão **não** abre MR; use `--create-mr
 
 Se houver uma **gravação ativa** (iniciada por `iaw create --recording`), o
 `finish-task` assume o fluxo de gravação: para o registro, sugere um resumo a
-partir das janelas ativas e **fecha a Task/Issue** no GitLab (título, descrição,
-assignee, data de fechamento e label do mês).
+partir dos **screenshots + janelas ativas** (visão via Gemini/`agy`) e **fecha a
+Task/Issue** no GitLab (título, descrição, assignee, data de fechamento e label
+do mês).
 
 Opções úteis do `finish-task`:
 
@@ -252,12 +253,12 @@ iaw finish-task --target-branch main # branch de destino do MR
 iaw finish-task --keep-workspace     # mantém .iaw_workspace/ após concluir
 ```
 
-Gravação de atividades (Windows/Linux, sem dependências extras):
+Gravação de atividades (janelas ativas + screenshots da tela):
 
 ```bash
-iaw create --task --title "Enviar RIT" --recording  # grava janelas ativas
+iaw create --task --title "Enviar RIT" --recording  # grava janelas + screenshots
 # ... trabalha normalmente ...
-iaw finish-task  # fecha a task com resumo gerado do histórico de janelas
+iaw finish-task  # fecha a task com resumo gerado por visão (Gemini/agy)
 ```
 
 ---
