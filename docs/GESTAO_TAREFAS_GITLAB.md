@@ -107,6 +107,15 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 
 Lista todos os work items **fechados** de um mês e indica a categoria de cada um.
 
+O mês é definido por **dois critérios combinados**:
+
+1. **Label do mês** (ex.: `SET/2026`) — filtrado na API do GitLab.
+2. **Data de fechamento** (`closed_at`) — o item precisa ter sido **fechado dentro
+   daquele mês**.
+
+Ou seja, só entra no relatório o item que tiver o label do mês **e** tiver sido
+fechado naquele mês.
+
 ### 4.1 Sintaxe
 
 ```bash

@@ -409,12 +409,12 @@ def create_work_item_cmd(
     )
 
 
-@relatorio_app.command("tasks", help="Lista as tasks/issues fechadas de um mês (label).")
+@relatorio_app.command("tasks", help="Lista as tasks/issues fechadas de um mês (label + data de fechamento).")
 def relatorio_tasks(
     label: str = typer.Argument(None, help="Label do mês (ex: SET/2026). Padrão: mês atual."),
     project_id: str = typer.Option(None, "--project-id", help="Path do projeto no GitLab (ex: suap)."),
 ) -> None:
-    """Lista work items fechados indicando a categoria (task geral, demanda ou erro)."""
+    """Lista work items fechados no mês (label) e indica a categoria (task geral, demanda ou erro)."""
     label = (label or work_items.current_month_label()).strip().upper()
     try:
         items = work_items.list_closed_work_items(label=label, project_id=project_id)
