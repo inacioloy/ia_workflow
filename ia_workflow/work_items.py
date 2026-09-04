@@ -35,6 +35,10 @@ CATEGORIA_TASK_GERAL = "task geral"
 CATEGORIA_DEMANDA = "demanda"
 CATEGORIA_ERRO = "erro"
 
+PAPEL_AUTOR = "autor"
+PAPEL_ASSIGNEE = "resolvido por"
+PAPEL_AMBOS = "autor e resolvido por"
+
 
 def current_month_label(now: datetime | None = None) -> str:
     """Retorna o label do mês atual no formato ``SET/2026``."""
@@ -103,6 +107,37 @@ def item_type_label(item: Any) -> str:
     return "Task" if str(getattr(item, "issue_type", "") or "").lower() == "task" else "Issue"
 
 
+def _user_id(value: Any) -> Any:
+    """Extrai o id de um usuário (dict ou objeto do python-gitlab)."""
+    if isinstance(value, dict):
+        return value.get("id")
+    return getattr(value, "id", None)
+
+
+def user_role(item: Any, user_id: Any) -> str | None:
+    """Indica o papel do usuário no item: 'autor', 'resolvido por' ou ambos.
+
+    Retorna ``None`` se o usuário não for autor nem assignee.
+    """
+    author_id = _user_id(getattr(item, "author", None))
+    assignee_ids = [_user_id(a) for a in (getattr(item, "assignees", None) or [])]
+    if not assignee_ids:
+        single = _user_id(getattr(item, "assignee", None))
+        if single is not None:
+            assignee_ids = [single]
+
+    is_author = author_id == user_id
+    is_assignee = user_id in assignee_ids
+
+    if is_author and is_assignee:
+        return PAPEL_AMBOS
+    if is_author:
+        return PAPEL_AUTOR
+    if is_assignee:
+        return PAPEL_ASSIGNEE
+    return None
+
+
 def create_work_item(
     *,
     title: str,
@@ -148,8 +183,14 @@ def list_closed_work_items(
     *,
     label: str,
     project_id: str | None = None,
-) -> list[tuple[Any, str]]:
-    """Lista work items fechados do mês e retorna ``(item, categoria)``.
+) -> dict[str, Any]:
+    """Lista os work items fechados do mês **do usuário do token**.
+
+    Retorna um dicionário com:
+
+    - ``items``: lista de ``(item, categoria, papel)`` — apenas itens em que o
+      usuário do token é **autor** ou **assignee**;
+    - ``username``: login do usuário do token (para exibição).
 
     O mês é definido pelo **label** (ex.: ``SET/2026``) e confirmado pela
     **data de fechamento** (``closed_at``) do item — ou seja, o item precisa
@@ -172,11 +213,20 @@ def list_closed_work_items(
     start, end = _month_bounds(year, month)
 
     client = GitLabClient()
+    user = client.current_user()
+    user_id = user.id
+    username = getattr(user, "username", "") or "você"
+
     items = client.list_issues(pid, state="closed", labels=label)
 
-    resultado: list[tuple[Any, str]] = []
+    resultado: list[tuple[Any, str, str]] = []
     for item in items:
         closed = _closed_at(item)
-        if closed is not None and start <= closed < end:
-            resultado.append((item, classify_work_item(item)))
-    return resultado
+        if closed is None or not (start <= closed < end):
+            continue
+        papel = user_role(item, user_id)
+        if papel is None:
+            continue
+        resultado.append((item, classify_work_item(item), papel))
+
+    return {"items": resultado, "username": username}

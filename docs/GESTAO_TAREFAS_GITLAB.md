@@ -105,16 +105,19 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 
 ## 4. Relatório de tasks/issues fechadas (`iaw relatorio tasks`)
 
-Lista todos os work items **fechados** de um mês e indica a categoria de cada um.
+Lista os work items **fechados** do mês **do usuário do token** (você) e indica
+a categoria de cada um.
 
-O mês é definido por **dois critérios combinados**:
+O relatório aplica **três filtros combinados**:
 
 1. **Label do mês** (ex.: `SET/2026`) — filtrado na API do GitLab.
 2. **Data de fechamento** (`closed_at`) — o item precisa ter sido **fechado dentro
    daquele mês**.
+3. **Usuário** — só entram itens em que você é **autor** ou **assignee**
+   (o relatório mostra o seu papel: `autor`, `resolvido por` ou `autor e resolvido por`).
 
-Ou seja, só entra no relatório o item que tiver o label do mês **e** tiver sido
-fechado naquele mês.
+Ou seja, só entra no relatório o item que tiver o label do mês, tiver sido
+fechado naquele mês **e** for seu (autor ou assignee).
 
 ### 4.1 Sintaxe
 
@@ -143,14 +146,14 @@ iaw relatorio tasks SET/2026 --project-id cosinf/suap
 ### 4.3 Saída
 
 ```
-      Relatório de tasks/issues fechadas (SET/2026)
-┏━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-┃     # ┃ Categoria    ┃ Tipo  ┃ Título                              ┃
-┡━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
-│  1234 │ ✅ task geral │ Task  │ Corrigir N+1 na listagem de diários │
-│  1235 │ 📦 demanda    │ Task  │ Nova tela de relatórios gerenciais  │
-│  1236 │ 🐞 erro       │ Issue │ Erro 500 ao salvar boletim          │
-└───────┴──────────────┴───────┴──────────────────────────────────────┘
+  Relatório de tasks/issues fechadas (SET/2026) — inacio
+┏━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃     # ┃ Categoria    ┃ Tipo  ┃ Papel               ┃ Título                              ┃
+┡━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│  1234 │ ✅ task geral │ Task  │ autor               │ Corrigir N+1 na listagem de diários │
+│  1235 │ 📦 demanda    │ Task  │ resolvido por       │ Nova tela de relatórios gerenciais  │
+│  1236 │ 🐞 erro       │ Issue │ autor e resolvido por│ Erro 500 ao salvar boletim          │
+└───────┴──────────────┴───────┴─────────────────────┴────────────────────────────────────┘
 
 Total: 3 work item(s) — 1 erro, 1 demanda, 1 task geral.
 ```
@@ -162,6 +165,14 @@ A categoria é determinada assim:
 | **erro** | Issue com label `bug` |
 | **demanda** | Task com label `demandas` |
 | **task geral** | Task sem `demandas` |
+
+O campo **Papel** indica a relação do usuário do token com o item:
+
+| Papel | Significado |
+|-------|-------------|
+| `autor` | Você criou o work item |
+| `resolvido por` | Você é o assignee |
+| `autor e resolvido por` | Você criou e também é o assignee |
 
 ---
 

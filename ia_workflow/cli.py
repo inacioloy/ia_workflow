@@ -417,19 +417,26 @@ def relatorio_tasks(
     """Lista work items fechados no mês (label) e indica a categoria (task geral, demanda ou erro)."""
     label = (label or work_items.current_month_label()).strip().upper()
     try:
-        items = work_items.list_closed_work_items(label=label, project_id=project_id)
+        resultado = work_items.list_closed_work_items(label=label, project_id=project_id)
     except GitLabError as exc:
         console.print(f"[red]Erro:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
+    items = resultado["items"]
+    username = resultado["username"]
+
     if not items:
-        console.print(f"Nenhum work item fechado com o label '[cyan]{label}[/cyan]'.")
+        console.print(
+            f"Nenhum work item fechado com o label '[cyan]{label}[/cyan]' "
+            f"para o usuário [cyan]{username}[/cyan] (autor ou assignee)."
+        )
         return
 
-    table = Table(title=f"Relatório de tasks/issues fechadas ({label})")
+    table = Table(title=f"Relatório de tasks/issues fechadas ({label}) — {username}")
     table.add_column("#", justify="right", style="cyan")
     table.add_column("Categoria")
     table.add_column("Tipo")
+    table.add_column("Papel")
     table.add_column("Título", overflow="fold")
 
     icons = {
@@ -438,12 +445,13 @@ def relatorio_tasks(
         work_items.CATEGORIA_TASK_GERAL: "✅",
     }
     contagem: dict[str, int] = {}
-    for item, categoria in items:
+    for item, categoria, papel in items:
         contagem[categoria] = contagem.get(categoria, 0) + 1
         table.add_row(
             f"#{getattr(item, 'iid', '')}",
             f"{icons.get(categoria, '•')} {categoria}",
             work_items.item_type_label(item),
+            papel,
             getattr(item, "title", "") or "",
         )
 
