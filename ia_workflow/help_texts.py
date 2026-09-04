@@ -55,6 +55,34 @@ COMMAND_HELP: dict[str, dict] = {
         ),
         "exemplos": ["iaw analyze", "iaw analyze --dry-run"],
     },
+    "create": {
+        "resumo": "Cria um work item (Task/Issue) no GitLab do projeto configurado.",
+        "detalhe": (
+            "Pergunta o título (ou use --title) e cadastra o work item no projeto "
+            "GitLab (padrão: gitlab_project da config) com assignee = seu usuário. "
+            "--task cria uma Task; com --demanda adiciona o label 'demandas' "
+            "(task de demanda). --issue cria uma Issue com label 'bug' (erro). "
+            "Todo work item recebe o label do mês atual (ex: SET/2026)."
+        ),
+        "exemplos": [
+            "iaw create --task --title \"Corrigir N+1 nos diários\"",
+            "iaw create --task --demanda --title \"Nova tela de relatórios\"",
+            "iaw create --issue --title \"Erro 500 ao salvar boletim\"",
+        ],
+    },
+    "relatorio": {
+        "resumo": "Gera relatórios a partir dos work items do GitLab.",
+        "detalhe": (
+            "Subcomando `tasks`: lista os work items fechados do mês (label) e "
+            "indica a categoria de cada um — task geral (Task sem 'demandas'), "
+            "demanda (Task com 'demandas') ou erro (Issue com 'bug'). "
+            "Se o label do mês for omitido, usa o mês atual."
+        ),
+        "exemplos": [
+            "iaw relatorio tasks SET/2026",
+            "iaw relatorio tasks --project-id cosinf/suap",
+        ],
+    },
     "start-task": {
         "resumo": "Inicia uma tarefa a partir de uma Issue do GitLab (Task-First).",
         "detalhe": (

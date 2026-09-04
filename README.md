@@ -35,6 +35,12 @@ iaw setup                      # configura token GitLab, engine, nome, caminho d
 iaw init                       # cria a pasta .iaw/ no projeto atual
 
 iaw start-task 4512            # baixa a Issue do GitLab e gera o artefato
+
+iaw create --task --title "Corrigir N+1 nos diários"      # task geral
+iaw create --task --demanda --title "Nova tela de relatórios"  # demanda
+iaw create --issue --title "Erro 500 ao salvar boletim"   # erro (bug)
+iaw relatorio tasks SET/2026   # tasks/issues fechadas do mês (com categoria)
+
 iaw run --workflow bug_fix --issue-id 4512   # orquestra a IA (indicando a tarefa)
 iaw run --workflow bug_fix --issue-id 4512 --log   # idem, com log de execução da IA
 iaw run --workflow bug_fix --issue-id 4512 --create-mr   # idem, abrindo MR ao final
@@ -100,6 +106,8 @@ steps:
 | `iaw init [--analyze]` | Cria/reconfigura `.iaw/` (com `--analyze`, preenche stack/contexto via IA) |
 | `iaw analyze [--dry-run]` | Analisa o projeto e preenche stack.md/contexto.md (IA) |
 | `iaw start-task <id>` | Baixa Issue do GitLab e gera artefato inicial |
+| `iaw create [--task\|--issue] [--demanda] [--title <t>]` | Cria Task/Issue no GitLab (assignee = você, label do mês) |
+| `iaw relatorio tasks <label>` | Lista tasks/issues fechadas do mês (task geral/demanda/erro) |
 | `iaw run [--workflow <n>] [--issue-id <id>] [--log] [--create-mr]` | Orquestra o workflow (tarefa, log e/ou abrindo MR ao final) |
 | `iaw finish-task` | Atualiza o relatório (com `--create-mr`, abre o MR) |
 | `iaw status` | Acompanha execuções |
@@ -115,6 +123,7 @@ steps:
 |-----------|----------|
 | [Entendendo Workflows](docs/WORKFLOWS.md) | ⭐ Formato do YAML, ações, `skill:`/`subagent:`, gates e funcionamento |
 | [Guia do Desenvolvedor](docs/GUIA_DESENVOLVEDOR.md) | ⭐ Uso completo: conceitos, config, workflows, relatório, monitoramento |
+| [Gestão de Tarefas no GitLab](docs/GESTAO_TAREFAS_GITLAB.md) | ⭐ Como usar `iaw create` e `iaw relatorio tasks` (Tasks/Issues e labels) |
 | [Exemplos de Fluxos Dev](docs/exemplos_fluxos_dev.md) | Passo a passo no SUAP (bug e nova funcionalidade) + como chamar o `iaw` |
 | [Plano de Implementação](docs/PLANO.md) | Fases, decisões e arquitetura |
 | [Migração do SUAP](docs/MIGRACAO_SUAP.md) | Análise das pastas legadas → `.iaw/` |

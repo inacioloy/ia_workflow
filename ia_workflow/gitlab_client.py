@@ -55,6 +55,61 @@ class GitLabClient:
         except Exception as exc:  # noqa: BLE001
             raise GitLabError(f"Não foi possível acessar a Issue #{issue_id}: {exc}") from exc
 
+    def current_user(self) -> Any:
+        """Retorna o usuário autenticado (para usar como assignee)."""
+        try:
+            return self.gl.user
+        except GitLabError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GitLabError(f"Não foi possível obter o usuário autenticado: {exc}") from exc
+
+    def create_issue(
+        self,
+        project_id: str,
+        *,
+        title: str,
+        description: str = "",
+        labels: list[str] | None = None,
+        issue_type: str = "issue",
+    ) -> Any:
+        """Cria um work item (Issue ou Task) no GitLab, com assignee = usuário atual."""
+        try:
+            project = self.get_project(project_id)
+            user = self.current_user()
+            data: dict[str, Any] = {
+                "title": title,
+                "description": description,
+                "issue_type": issue_type,
+                "assignee_ids": [user.id],
+            }
+            if labels:
+                data["labels"] = ",".join(labels)
+            return project.issues.create(data)
+        except GitLabError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GitLabError(f"Não foi possível criar o work item: {exc}") from exc
+
+    def list_issues(
+        self,
+        project_id: str,
+        *,
+        state: str = "opened",
+        labels: str | None = None,
+    ) -> list[Any]:
+        """Lista Issues do GitLab (opcionalmente por estado e label)."""
+        try:
+            project = self.get_project(project_id)
+            kwargs: dict[str, Any] = {"state": state, "all": True}
+            if labels:
+                kwargs["labels"] = labels
+            return list(project.issues.list(**kwargs))
+        except GitLabError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GitLabError(f"Não foi possível listar as Issues: {exc}") from exc
+
     def create_merge_request(self, project_id: str, **kwargs: Any) -> Any:
         """Cria um Merge Request (Fase 4 — ainda não usado pelo finish-task)."""
         try:

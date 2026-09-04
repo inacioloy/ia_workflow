@@ -12,6 +12,7 @@ from pathlib import Path
 import typer
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
+from rich.table import Table
 
 from . import __version__
 from . import analyzer
@@ -26,6 +27,7 @@ from . import publish
 from . import runner
 from . import skills as skills_mod
 from . import state
+from . import work_items
 from . import workspace
 from .engines import available_engines
 from .gitlab_client import GitLabClient, GitLabError
@@ -41,6 +43,9 @@ app.add_typer(config_app, name="config")
 
 skill_app = typer.Typer(help="Gerencia as skills do projeto (.iaw/skills/).")
 app.add_typer(skill_app, name="skill")
+
+relatorio_app = typer.Typer(help="Gera relatórios a partir dos work items do GitLab.")
+app.add_typer(relatorio_app, name="relatorio")
 
 console = Console()
 
@@ -357,6 +362,94 @@ def start_task(
         f"[green]✓[/green] Artefato inicial gerado em [cyan]{artefato}[/cyan]"
     )
     console.print("Revise o artefato e execute `iaw run` para acionar a IA.")
+
+
+@app.command("create", help="Cria um work item (Task/Issue) no GitLab do projeto configurado.")
+def create_work_item_cmd(
+    task: bool = typer.Option(False, "--task", help="Cria uma Task."),
+    issue: bool = typer.Option(False, "--issue", help="Cria uma Issue (erro/bug)."),
+    demanda: bool = typer.Option(
+        False, "--demanda", help="Marca a Task como demanda (label 'demandas')."
+    ),
+    title: str = typer.Option(None, "--title", help="Título do work item (senão será perguntado)."),
+    project_id: str = typer.Option(None, "--project-id", help="Path do projeto no GitLab (ex: suap)."),
+) -> None:
+    """Cria uma Task (--task) ou Issue (--issue) atribuída ao seu usuário."""
+    if task and issue:
+        console.print("[red]Erro:[/red] use apenas um de --task ou --issue.")
+        raise typer.Exit(code=1)
+    if not task and not issue:
+        console.print("[red]Erro:[/red] informe --task ou --issue.")
+        raise typer.Exit(code=1)
+    if demanda and not task:
+        console.print("[red]Erro:[/red] --demanda só é válido junto de --task.")
+        raise typer.Exit(code=1)
+
+    if not title or not title.strip():
+        title = typer.prompt("Título do work item")
+
+    kind = "task" if task else "issue"
+    try:
+        item = work_items.create_work_item(
+            title=title.strip(), kind=kind, demanda=demanda, project_id=project_id
+        )
+    except (ValueError, GitLabError) as exc:
+        console.print(f"[red]Erro:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    categoria = work_items.classify_work_item(item)
+    console.print(
+        f"[green]✓[/green] {work_items.item_type_label(item)} criada: "
+        f"[cyan]{getattr(item, 'web_url', '')}[/cyan]"
+    )
+    console.print(f"   #{getattr(item, 'iid', '')} — {title.strip()}")
+    console.print(
+        f"   Categoria: [bold]{categoria}[/bold] | "
+        f"Labels: {', '.join(getattr(item, 'labels', None) or [])}"
+    )
+
+
+@relatorio_app.command("tasks", help="Lista as tasks/issues fechadas de um mês (label).")
+def relatorio_tasks(
+    label: str = typer.Argument(None, help="Label do mês (ex: SET/2026). Padrão: mês atual."),
+    project_id: str = typer.Option(None, "--project-id", help="Path do projeto no GitLab (ex: suap)."),
+) -> None:
+    """Lista work items fechados indicando a categoria (task geral, demanda ou erro)."""
+    label = (label or work_items.current_month_label()).strip().upper()
+    try:
+        items = work_items.list_closed_work_items(label=label, project_id=project_id)
+    except GitLabError as exc:
+        console.print(f"[red]Erro:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if not items:
+        console.print(f"Nenhum work item fechado com o label '[cyan]{label}[/cyan]'.")
+        return
+
+    table = Table(title=f"Relatório de tasks/issues fechadas ({label})")
+    table.add_column("#", justify="right", style="cyan")
+    table.add_column("Categoria")
+    table.add_column("Tipo")
+    table.add_column("Título", overflow="fold")
+
+    icons = {
+        work_items.CATEGORIA_ERRO: "🐞",
+        work_items.CATEGORIA_DEMANDA: "📦",
+        work_items.CATEGORIA_TASK_GERAL: "✅",
+    }
+    contagem: dict[str, int] = {}
+    for item, categoria in items:
+        contagem[categoria] = contagem.get(categoria, 0) + 1
+        table.add_row(
+            f"#{getattr(item, 'iid', '')}",
+            f"{icons.get(categoria, '•')} {categoria}",
+            work_items.item_type_label(item),
+            getattr(item, "title", "") or "",
+        )
+
+    console.print(table)
+    resumo = ", ".join(f"{n} {c}" for c, n in sorted(contagem.items()))
+    console.print(f"\n[bold]Total:[/bold] {len(items)} work item(s) — {resumo}.")
 
 
 @app.command(help="Orquestra a IA pelo workflow YAML (.iaw/workflows).")
