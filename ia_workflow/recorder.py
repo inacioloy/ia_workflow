@@ -52,11 +52,16 @@ def _is_wsl() -> bool:
 
 def _powershell(script: str, timeout: int = 30) -> str:
     """Executa um script no Windows via interop do WSL e retorna o stdout."""
+    # Força o PowerShell a emitir UTF-8 (por padrão ele usa o code page do
+    # console Windows, o que corrompe acentos ao ler como UTF-8 no Linux).
+    full_script = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8;\n" + script
     try:
         result = subprocess.run(
-            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+            ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", full_script],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
