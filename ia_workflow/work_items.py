@@ -10,10 +10,10 @@ Convenções usadas pelo ``iaw create`` e pelo ``iaw relatorio tasks``:
 
 As categorias do relatório são inferidas dos labels e do ``issue_type``.
 
-O relatório mensal seleciona os itens pela **data de fechamento** (``closed_at``)
-dentro do mês indicado pelo label (ex.: ``SET/2026``) — o item **não** precisa
-ter o label do mês para aparecer — e restringe aos itens em que o usuário do
-token é **autor** ou **assignee**.
+O relatório mensal restringe aos itens em que o usuário do token é **autor** ou
+**assignee**. Um item pertence ao mês se **tiver o label do mês** (ex.:
+``SET/2026``) — prioridade — **ou** se tiver sido **fechado** (``closed_at``)
+dentro daquele mês.
 """
 
 from __future__ import annotations
@@ -88,6 +88,15 @@ def _closed_at(item: Any) -> datetime | None:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _has_label(item: Any, target: str) -> bool:
+    """Verifica se o item possui o label informado (case-insensitive)."""
+    target = (target or "").strip().lower()
+    return any(
+        str(l).strip().lower() == target
+        for l in (getattr(item, "labels", None) or [])
+    )
 
 
 def classify_work_item(item: Any) -> str:
@@ -186,11 +195,12 @@ def list_closed_work_items(
     label: str,
     project_id: str | None = None,
 ) -> dict[str, Any]:
-    """Lista os work items fechados no mês **do usuário do token**.
+    """Lista os work items do usuário do token para o mês indicado.
 
-    O mês é indicado pelo ``label`` (ex.: ``AGO/2026``), mas a seleção é feita
-    pela **data de fechamento** (``closed_at``) dentro daquele mês — o item
-    **não** precisa ter o label do mês para aparecer.
+    Um item entra no relatório se **tiver o label do mês** (ex.: ``AGO/2026``)
+    **ou** se tiver sido **fechado** dentro daquele mês (``closed_at``). O label
+    tem prioridade: mesmo que o fechamento tenha ocorrido em outro mês, o item
+    com o label do mês é incluído.
 
     Retorna um dicionário com:
 
@@ -229,7 +239,9 @@ def list_closed_work_items(
     resultado: list[tuple[Any, str, str]] = []
     for item in by_iid.values():
         closed = _closed_at(item)
-        if closed is None or not (start <= closed < end):
+        in_month = closed is not None and start <= closed < end
+        # Prioridade: label do mês; senão, data de fechamento dentro do mês.
+        if not (_has_label(item, label) or in_month):
             continue
         papel = user_role(item, user_id)
         if papel is None:

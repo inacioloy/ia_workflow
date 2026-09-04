@@ -108,15 +108,12 @@ iaw create --issue --title "Timeout no login" --project-id cosinf/outro-projeto
 Lista os work items **fechados** do mês **do usuário do token** (você) e indica
 a categoria de cada um.
 
-O mês é indicado pelo argumento (ex.: `AGO/2026`), mas a seleção é feita pela
-**data de fechamento** (`closed_at`) dentro daquele mês — **não** é exigido que
-o item tenha o label do mês.
+O mês é indicado pelo argumento (ex.: `AGO/2026`). Um item entra no relatório se:
 
-Filtros aplicados:
+1. **Tiver o label do mês** (ex.: `AGO/2026`) — **prioridade**; ou
+2. **Tiver sido fechado dentro do mês** (`closed_at`) — mesmo sem o label.
 
-1. **Usuário** — só entram itens em que você é **autor** ou **assignee**.
-2. **Data de fechamento** (`closed_at`) — o item precisa ter sido **fechado dentro
-   do mês** indicado (ex.: agosto/2026).
+Além disso, só entram itens em que você é **autor** ou **assignee**.
 
 O relatório também mostra o seu papel: `autor`, `resolvido por` ou
 `autor e resolvido por`.
